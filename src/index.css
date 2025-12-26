@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+body {
+  @apply bg-gray-700;
+}
+/* 
+@layer base {
+  * {
+    @apply overscroll-none overflow-hidden touch-manipulation select-none;
+  }
+}
+
+.moveable-rotation {
+  @apply overflow-visible;
+}
+
+.moveable-control-box {
+  @apply overflow-visible;
+}
+
+body {
+  @apply fixed m-0 left-0 top-0 w-full h-full font-sans text-[13px] p-4 box-border bg-gray-300;
+} */

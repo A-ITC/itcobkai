@@ -1,0 +1,28 @@
+{
+  "name": "itcobkai",
+  "version": "2.0.0-alpha.1",
+  "description": "",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "prettier": {
+    "trailingComma": "none",
+    "tabWidth": 2,
+    "semi": true,
+    "singleQuote": false,
+    "singleAttributePerLine": true,
+    "arrowParens": "avoid",
+    "printWidth": 120
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.952.0",
+    "@skyway-sdk/room": "^2.1.0",
+    "@skyway-sdk/token": "^2.0.0",
+    "@types/aws-lambda": "^8.10.159",
+    "dotenv": "^17.2.3"
+  }
+}

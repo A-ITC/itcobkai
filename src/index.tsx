@@ -1,12 +1,8 @@
-import React from "react";
-import ReactDOM from "react-dom";
-import App from "./main/App";
+/* @refresh reload */
+import { render } from "solid-js/web";
+import App from "./App";
+import "./index.css";
 
 window.onload = () => {
-    ReactDOM.render(
-        <React.StrictMode>
-            <App />
-        </React.StrictMode>,
-        document.getElementById("root")
-    );
-}
+  render(() => <App />, document.getElementById("root")!);
+};

@@ -1,115 +1,56 @@
 # 概要
-サークルのOB会を大人数で行うために作成したボイスチャット兼Wikiです。
+サークルのOB会を大人数で行うために作成したボイスチャットです
 
-# とりあえず試す
-1. Node.jsをインストール
-1. このリポジトリのコードを`git clone`又はダウンロード
-1. [これ](https://itcobkai.s3.ap-northeast-1.amazonaws.com/sample/itcobkai.zip)を展開して各ディレクトリに配置
-1. src/rtc/viewer/Viewer.tsxの以下の行を編集
+## 構築手順
+### 事前準備
+- Discord Developer Portalから新規アプリケーションを作成
+  - Auth2のClient IDとClient Secretを入手
+- Skywayで新規アカウントを作成
+  - アプリケーションIDとシークレットキーを入手
+- AWSでlambdaを作成
+  - Lambdaの関数URLを有効化
+  - タイムアウト設定を15秒程度に設定 (変更しないとログイン中にタイムアウトで500エラーになる)
+- AWSでS3のバケットを作成
 
-```typescript
-// 以下をコメントアウト
-ct.init(res.profiles, rtc.message)
-rtc.start(ct.player!.profile, ct.player!.id, localAudio.current!, remoteAudio.current!, receive)
-
-// 以下のコメントアウトを解除
-ct.init(res.profiles, console.log)
-ct.start(5, 4)
-ct.join(res.profiles["2Jc4uot"], "2Jc4uot", 6, 7)
-ct.join(res.profiles["C3kjj1X"], "C3kjj1X", 6, 6)
+### ビルド
+ビルドとデプロイを同時に行う場合
+```sh
+npm install
+npm run deploy
 ```
 
-5. 以下のコマンドを実行
+ビルドのみ行う場合
+```sh
+npm install
+npm run build
+
+cd lambda
+npm run build
 ```
-$ npm install
-$ npm start
-```
+ビルド後に`dist`をS3に、`lambda/dist`をlambdaにアップロードする
 
-# デプロイ
-## AWSの設定
-### S3
-以下の構造でバケットとオブジェクトを作成
-```
-itcobkai (公開バケット)
-├- assets/
-│  ├- favicon.png
-│  ├- hakase.jpg
-│  ├- map_b.png
-│  └- map_t.png
-├- build/
-└- note/
+### 環境変数
+プロジェクト直下に`.env`を作成してください
 
-itcobkai-internal (非公開のバケット)
-└- md/
-```
+```sh
+# AWS関連
+FUNCTION_NAME="[lambdaの関数名]"
+VITE_API_URL="https://[lambdaの関数URLのアドレス]/"
+S3_BUCKET="[HTMLやJavascript/CSSを格納するS3のバケット名]"
 
-### lambda
-以下の関数を作成
-- itcobkai
-  - AmazonS3FullAccessをアタッチ
-  - AmazonDynamoDBFullAccessをアタッチ
-  - lambdaディレクトリ直下のにあるPythonファイルを配置(tools/lambda.sh)
-  - profiles.pyを配置
-  - 以下の形式のkey.pyを作成(kinesisとskywayはどちらか一方のみでOK)
+# Discord OAuth2関連
+VITE_DISCORD_CLIENT_ID="[DiscordのClient ID]"
+DISCORD_CLIENT_SECRET="[DiscordのSecretキー]"
+DISCORD_ALLOWED_SERVERS="サーバ名1:サーバID1(数字18桁),サーバ名2:サーバID2,..."
 
-```python
-KEYS = {
-    "AWS_REGION": 'kinesisのリージョン',
-    "AWS_CHANNEL_ARN": 'kinesisのチャンネル',
-    "AWS_ACCESS_KEY_ID": 'kinesisのアクセス鍵',
-    "AWS_SECRET_ACCESS_KEY": 'kinesisの秘密鍵',
-    "AWS_CH_NAME": 'kinesisのチャンネル名',
-    "SKYWAY": "skywayのキー"
-}
-
-S3_PUBLIC = "itcobkai"
-S3_INTERNAL = "itcobkai-internal"
-```
-
-- itcobkai-requests
-  - [ここ](https://sebenkyo.com/2021/05/21/post-1979/)を参考にrequests(外部ライブラリ)をレイヤーとして追加
-  - AWSLambdaRoleをアタッチ
-  - lambda/discord.pyの内容をlambda_function.pyにコピー
-  - 以下の形式のkey.pyを作成
-
-```python
-DISCORD = {
-    "CLIENT_ID": "Discord APIのID",
-    "CLIENT_SECRET": "Discord APIのシークレットキー"
-}
-```
-
-### DynamoDB
-以下のテーブルを作成する。全て「設定をカスタマイズ」からオンデマンドキャパシティーモードを選択する。
-
-| テーブル名 | パーティションキー | ソートキー | TTL |
-| - | - | - | - |
-| itcobkai | token (String) | | expired_at | 
-| itcobkai_notes | id (String) | | |
-| itcobkai_unreads | user_id (String) | note_id (String) | |
-| itcobkai_status | mode (String) | | |
-
-
-### Amazon API Gateway
-以下の２つのエンドポイントを設定デプロイする。ステージからURLを控えておく。
-- POST /
-  - lambda統合でitcobkaiと紐付ける
-- POST /discord
-  - lambda統合でitcobkai_requestsと紐付ける
-
-
-### Kinesis Video Streams
-skywayの方が圧倒的に使いやすい上に無料なので現在は使っていない。
-
-
-## フロント側の設定
-1. AWS SDK for Pythonをインストール
-1. 「とりあえず試す」の項目４以外を全て行う
-1. src/common/Config.jsで`LAMBDA_URL`と`S3_URL`を設定
-1. 以下のコマンドを実行
-
-```
-$ npm run build
+# SkyWay関連
+VITE_SKYWAY_ID="[SKYWAYのID]"
+VITE_SKYWAY_SECRET="[SKYWAYのシークレットキー]"
+ 
+# 認証関連
+SESSION_PASSWORD="[任意のランダムな文字列]"
+TOKEN_PASSWORD="[任意のランダムな文字列]"
+TOKEN_EXPIRATION=1800
 ```
 
 # その他

@@ -1,14 +1,12 @@
 node_modules/
-__pycache__/
-build/
-assets/
-test.*
-keys.*
-*.pem
-package-lock.json
-profiles.py
-index.html
-.DS_Store
-@types/
 local/
-*.db
+lambda/dist/
+test.*
+.DS_Store
+.env
+env.*
+config.toml
+*\ copy.*
+*_old
+dist
+dist.zip
