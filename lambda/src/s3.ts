@@ -1,8 +1,47 @@
-import { S3_BUCKET } from "./const";
+import { APIGatewayProxyResultV2 } from "aws-lambda";
+import { DATA_JSON, S3_BUCKET } from "./const";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { Buffer } from "buffer";
 
 const s3Client = new S3Client({});
-const ACCOUNTS_JSON = "discord-accounts.json";
+
+const MIME_TYPES: Record<string, string> = {
+  ".js": "application/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".svg": "image/svg+xml"
+};
+
+export const readFromS3 = async (bucket: string, key: string, cache = false): Promise<APIGatewayProxyResultV2> => {
+  const ext = key.slice(key.lastIndexOf(".")).toLowerCase();
+  const contentType = MIME_TYPES[ext] || "text/plain; charset=utf-8";
+  const isBinary = contentType.startsWith("image/") || contentType === "application/octet-stream";
+  const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!Body) throw new Error("Empty body");
+  const headers = {
+    "Content-Type": contentType,
+    ...(cache && { "Cache-Control": "public, max-age=3600" })
+  };
+  if (isBinary) {
+    const byteArray = await Body.transformToByteArray();
+    return {
+      statusCode: 200,
+      headers,
+      body: Buffer.from(byteArray).toString("base64"),
+      isBase64Encoded: true
+    };
+  } else {
+    return {
+      statusCode: 200,
+      headers,
+      body: await Body.transformToString()
+    };
+  }
+};
 
 export const S3 = {
   getText: async (bucket: string, key: string): Promise<string> => {
@@ -34,6 +73,6 @@ export const S3 = {
 };
 
 export const users = {
-  get: () => S3.getJson(S3_BUCKET, ACCOUNTS_JSON),
-  put: (data: any) => S3.putJson(S3_BUCKET, ACCOUNTS_JSON, data)
+  get: () => S3.getJson(S3_BUCKET, DATA_JSON),
+  put: (data: any) => S3.putJson(S3_BUCKET, DATA_JSON, data)
 };

@@ -1,16 +1,22 @@
 const APP = import.meta.env.VITE_APP_NAME;
 
-export const storage = new Proxy(JSON.parse(localStorage[APP] ?? "{}"), {
+interface Storage {
+  outer: number;
+  inner: number;
+}
+
+const defaultStorage: Storage = {
+  outer: 13,
+  inner: 2
+};
+
+export const storage = new Proxy(JSON.parse(localStorage.getItem(APP) ?? JSON.stringify(defaultStorage)), {
   set: (obj: { [x: string]: any }, prop: string, value: any) => {
     obj[prop] = value;
-    localStorage[APP] = JSON.stringify(obj);
+    localStorage.setItem(APP, JSON.stringify(obj));
     return true;
   }
-}) as {
-  interval: number;
-  apikey: string;
-  difficulty: string;
-};
+}) as Storage;
 
 type Method = "POST" | "PUT" | "GET" | "DELETE";
 

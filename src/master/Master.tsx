@@ -1,5 +1,5 @@
 import { createSignal } from "solid-js";
-import { SkywayMaster, SkywayViewer } from "./RTC";
+import { SkywayMaster, SkywayViewer } from "../common/RTC";
 
 export default function Skyway() {
   const [log, setLog] = createSignal("");

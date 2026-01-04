@@ -16,4 +16,5 @@ export const DISCORD_ALLOWED_SERVERS = process.env.DISCORD_ALLOWED_SERVERS ?? ""
 export const SKYWAY_ID = process.env.VITE_SKYWAY_ID ?? "";
 export const SKYWAY_SECRET = process.env.SKYWAY_SECRET ?? "";
 
-export const S3_BUCKET = process.env.S3_BUCKET ?? "";
+export const S3_BUCKET = process.env.VITE_S3_BUCKET ?? "";
+export const DATA_JSON = process.env.DATA_JSON ?? "";

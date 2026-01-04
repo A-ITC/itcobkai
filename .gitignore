@@ -10,3 +10,5 @@ config.toml
 *_old
 dist
 dist.zip
+_*/
+data/
