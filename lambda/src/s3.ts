@@ -1,6 +1,6 @@
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
 import { DATA_JSON, S3_BUCKET } from "./const";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Buffer } from "buffer";
 
 const s3Client = new S3Client({});
@@ -24,7 +24,7 @@ export const readFromS3 = async (bucket: string, key: string, cache = false): Pr
   if (!Body) throw new Error("Empty body");
   const headers = {
     "Content-Type": contentType,
-    ...(cache && { "Cache-Control": "public, max-age=3600" })
+    ...(cache && { "Cache-Control": "public, max-age=31536000, immutable" })
   };
   if (isBinary) {
     const byteArray = await Body.transformToByteArray();

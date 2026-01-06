@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
-import { Buffer } from "buffer";
 import { HTTPError } from "./utils";
+import { Buffer } from "buffer";
 
 export class JWT {
   public encode(payload: object, secret: string): string {

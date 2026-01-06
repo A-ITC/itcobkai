@@ -1,9 +1,9 @@
-import { S3_BUCKET, SESSION_PASSWORD, TOKEN_EXPIRATION } from "./const";
+import { CSS_PATH, JS_PATH, S3_BUCKET, SESSION_PASSWORD, TOKEN_EXPIRATION } from "./const";
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
-import { AuthSession, AuthToken } from "./auth";
-import { discord } from "./discord";
 import { createJsonResponse, HTTPError } from "./utils";
+import { AuthSession, AuthToken } from "./auth";
 import { readFromS3, users } from "./s3";
+import { discord } from "./discord";
 
 const session = new AuthSession(SESSION_PASSWORD);
 const token = new AuthToken(SESSION_PASSWORD, TOKEN_EXPIRATION);
@@ -19,8 +19,11 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
       if (!body.code || !body.redirect) {
         return createJsonResponse(400, { status: "error", message: "code and redirect are required" });
       }
-      const info = await discord(body.code, body.redirect);
-      const sessionCookie = session.issue({ h: info.hash });
+      const [allUsers, info] = await Promise.all([users.get(), discord(body.code, body.redirect)]);
+      const { hash, ...rest } = info;
+      allUsers.users[hash] = rest;
+      await users.put(allUsers);
+      const sessionCookie = session.issue({ h: hash });
       return createJsonResponse(200, { ...info, status: "ok" }, { cookies: [sessionCookie] });
     }
 
@@ -46,8 +49,22 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
 
     // GET / (index.html)
     if (method === "GET" && rawPath === "/") {
-      const res = await readFromS3(S3_BUCKET, "dist/index.html");
-      return res;
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "text/html" },
+        body: `<!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <title>itcobkai</title>
+          <script type="module" crossorigin src="./${JS_PATH}"></script>
+          <link rel="stylesheet" crossorigin href="./${CSS_PATH}">
+        </head>
+        <body>
+          <div id="root"></div>
+        </body>
+      </html>`
+      };
     }
 
     // GET /assets/{key}
@@ -72,6 +89,6 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
     if (error instanceof HTTPError) {
       return createJsonResponse(error.statusCode, { status: "error", message: error.message });
     }
-    return createJsonResponse(500, { status: "error", message: error.message || "Internal Server Error" });
+    return createJsonResponse(500, { status: "error", message: error.stack || "Internal Server Error" });
   }
 };

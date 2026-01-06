@@ -1,23 +1,23 @@
-import { build } from "esbuild";
-import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { unlink } from "node:fs/promises";
 import { config } from "dotenv";
+import { build } from "esbuild";
+import { exec } from "node:child_process";
 
 (async () => {
-  config({ path: "../.env" });
+  config({ path: "../.env", quiet: true });
   await build({
     entryPoints: ["src/index.ts"],
     bundle: true,
     platform: "node",
-    target: ["node20"],
-    outdir: "dist",
-    format: "cjs",
+    target: "node24",
+    outfile: "dist/index.mjs",
+    format: "esm",
     sourcemap: true,
     minify: false,
-    external: ["aws-sdk"]
+    external: ["@aws-sdk/*"]
   });
-  await promisify(exec)("zip -j dist.zip dist/index.js dist/index.js.map ../.env");
+  await promisify(exec)("zip -j dist.zip dist/index.mjs dist/index.mjs.map");
   const cmd = `aws lambda update-function-code --function-name ${process.env.VITE_APP_NAME} --zip-file fileb://dist.zip`;
   const { stdout } = await promisify(exec)(cmd);
   const result = JSON.parse(stdout);
