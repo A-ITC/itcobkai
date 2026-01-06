@@ -1,6 +1,5 @@
+import { Map, MapRaw, User } from "../common/Schema";
 import { storage } from "../common/Common";
-import request from "../common/Request";
-import { Map, User } from "../common/Schema";
 
 // Canvasにマップや人物を描画するクラス
 export default class MapCreater {
@@ -15,10 +14,10 @@ export default class MapCreater {
     this.resize();
   }
 
-  public async newMap(id: string, canvas: HTMLCanvasElement) {
+  public async newMap(mapraw: MapRaw, canvas: HTMLCanvasElement) {
     // 新しいマップを作成
     this.canvas = canvas;
-    this.map = await this.fetchMap(id);
+    this.map = await this.loadMap(mapraw);
   }
 
   public async draw(users: User[], left: number, top: number) {
@@ -29,19 +28,28 @@ export default class MapCreater {
     this.drawTop(left, top);
   }
 
-  private async fetchMap(id: string) {
+  private async loadMap(mapraw: MapRaw) {
     // マップ情報を取得
-    const res = await request("GET", "/map");
+    const red = mapraw.red.split(",").map(row => row.split("").map(char => char === "1"));
+    const black = mapraw.black.split(",").map(row => row.split("").map(char => char === "1"));
     const map: Map = {
-      area: res.map.area,
-      noentry: res.map.noentry,
+      area: red,
+      noentry: black,
       topImage: new Image(),
       bottomImage: new Image(),
-      width: res.noentry[0].length,
-      height: res.noentry.length
+      width: red[0].length,
+      height: red.length
     };
-    map.topImage.src = `data:image/png;base64,${res.topImage}`;
-    map.bottomImage.src = `data:image/jpg;base64,${res.bottomImage}`;
+    const load = (src: string, img: HTMLImageElement) =>
+      new Promise<HTMLImageElement>((resolve, reject) => {
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+      });
+    await Promise.all([
+      load(`/api/data/map/${mapraw.top}.png`, map.topImage),
+      load(`/api/data/map/${mapraw.bottom}.png`, map.bottomImage)
+    ]);
     return map;
   }
 

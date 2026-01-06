@@ -28,8 +28,6 @@ from pathlib import Path
 from xml.etree import ElementTree
 from dataclasses import dataclass
 
-load_dotenv()
-
 FLIPPED_HORIZONTALLY_FLAG = 0x80000000
 FLIPPED_VERTICALLY_FLAG = 0x40000000
 FLIPPED_DIAGONALLY_FLAG = 0x20000000
@@ -317,24 +315,30 @@ class Renderer:
 
 if __name__ == "__main__":
     if len(argv) > 1:
-        TMX_FILE = argv[1]
+        tmx_file = argv[1]
     else:
         msg = "TMXファイルを指定してください"
         raise ValueError(msg)
 
-    S3_BUCKET = environ.get("VITE_S3_BUCKET")
-    DATA_JSON = environ.get("DATA_JSON")
+    load_dotenv()
+    s3_bucket = environ.get("VITE_S3_BUCKET")
+    data_json = environ.get("DATA_JSON")
 
     s3 = client("s3")
     makedirs("data/map", exist_ok=True)
+    json_path = Path(f"data/{data_json}")
 
     try:
-        response = s3.get_object(Bucket=S3_BUCKET, Key=DATA_JSON)
+        response = s3.get_object(Bucket=s3_bucket, Key=data_json)
         data = loads(response["Body"].read().decode("utf-8"))
-    except s3.exceptions.NoSuchKey:
-        data = {"_map": {}}
+    except (s3.exceptions.NoSuchKey, s3.exceptions.ClientError):
+        if json_path.exists():
+            with json_path.open("r", encoding="utf-8") as f:
+                data = loads(f.read())
+        else:
+            data = {"maps": {}, "users": {}}
 
-    tmx = Tiled(TMX_FILE)
+    tmx = Tiled(tmx_file)
     result = {"red": "", "black": ""}
 
     # フラグレイヤーの抽出
@@ -357,7 +361,7 @@ if __name__ == "__main__":
         if not (png := Path(f"data/map/{h}.png")).exists():
             _, buf = cv2.imencode(".png", img)
             s3.put_object(
-                Bucket=S3_BUCKET,
+                Bucket=s3_bucket,
                 Key=png.as_posix(),
                 Body=buf.tobytes(),
                 ContentType="image/png",
@@ -365,13 +369,13 @@ if __name__ == "__main__":
             with png.open("wb") as f:
                 f.write(buf.tobytes())
 
-    data["_map"][Path(TMX_FILE).stem] = result
-    with Path("data/data.json").open("w", encoding="utf-8") as f:
+    data["maps"][Path(tmx_file).stem] = result
+    with json_path.open("w", encoding="utf-8") as f:
         dump(data, f, indent=2, ensure_ascii=False)
 
     s3.put_object(
-        Bucket=S3_BUCKET,
-        Key=DATA_JSON,
-        Body=dumps(data, ensure_ascii=False, indent=4),
+        Bucket=s3_bucket,
+        Key=data_json,
+        Body=dumps(data, ensure_ascii=False),
         ContentType="application/json",
     )

@@ -1,22 +1,21 @@
 import { SkywayViewer } from "../common/RTC";
 import { Action, User } from "../common/Schema";
-import Cropper, { Crop } from "./Cropper";
-import MapCreater from "./MapCreater";
+import MapController from "./MapController";
 
 // Viewerの肥大化を防ぐため処理部分を全てこちらに分離
 export default class Controller {
-  private mc = new MapCreater();
+  private mc = new MapController();
   private rtc = new SkywayViewer();
   private users: { [key: string]: User } = {};
 
   public onUpdate = (users: { [key: string]: User }) => {};
 
-  public async start(canvas: HTMLCanvasElement, audio: HTMLAudioElement) {
+  public async start(playerId: string, canvas: HTMLCanvasElement, audio: HTMLAudioElement) {
     // 接続開始ボタン押下時の処理
-    await this.mc.newMap("0", canvas);
-    await this.rtc.init("viewer", audio);
+    await this.rtc.init(playerId, audio);
+    this.mc.init(canvas, data => this.rtc.dataTo!.write(data));
 
-    this.rtc.dataTo!.write({ action: Action.USERS });
+    this.rtc.dataTo!.write({ action: Action.INIT });
 
     this.rtc.dataFrom = (data: { action: Action; data: any }) => {
       switch (data.action) {
@@ -25,10 +24,12 @@ export default class Controller {
           if (data.data.reload) location.reload();
           break;
         case Action.JOIN:
-          this.join(data.data.user);
+          this.users[data.data.user.id] = data.data.user;
+          this.onUpdate(this.users);
           break;
         case Action.MOVE:
-          this.move(data.data.user);
+          this.users[data.data.user.id].x = data.data.user.x;
+          this.users[data.data.user.id].y = data.data.user.y;
           this.onUpdate(this.users);
           break;
         case Action.MUTE:
@@ -36,16 +37,19 @@ export default class Controller {
           this.onUpdate(this.users);
           break;
         case Action.LEAVE:
-          this.leave(data.data.user);
+          delete this.users[data.data.user.id];
           this.onUpdate(this.users);
           break;
-        case Action.USERS:
+        case Action.INIT:
           Object.keys(data.data.users).forEach((clientId: string) => {
             const user = data.data.users[clientId];
-            if (clientId === ct.player!.id) {
-              this.start(user.x, user.y);
+            if (clientId === playerId) {
+              this.mc.newMap(data.data.mapId).then(() => {
+                this.mc.setUsers(data.data.users, playerId);
+                this.onUpdate(this.users);
+              });
             } else {
-              this.join(user);
+              this.users[data.data.user.id] = data.data.user;
             }
           });
           this.onUpdate(this.users);
@@ -56,23 +60,10 @@ export default class Controller {
 
   public end() {
     //  退席ボタン押下時の処理
+    this.rtc.disconnect();
   }
 
-  private join(user: User) {
-    // ユーザー参加処理
-    this.users[user.id] = user;
-  }
-
-  private leave(user: User) {
-    // ユーザー退席処理
-    delete this.users[user.id];
-  }
-
-  private move(user: User) {
-    // ユーザー移動処理
-    this.users[user.id].x = user.x;
-    this.users[user.id].y = user.y;
-  }
+  public mute() {}
 
   // public init(id: string, profiles: { [key: string]: Profile }, message: Function) {
   //   this.prs = new Persons(id, profiles);

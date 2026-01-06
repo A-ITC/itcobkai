@@ -9,7 +9,6 @@ export interface Crop {
 }
 
 // プレイヤーの存在するマス周辺を切り出すクラス
-// プレイヤーの座標情報はこのクラスで管理
 export default class Cropper {
   private left = 0;
   private top = 0;
@@ -22,7 +21,9 @@ export default class Cropper {
     this.jump(x, y);
   }
 
-  public canMove(x: number, y: number) {
+  public canMove(dx: number, dy: number): boolean {
+    const x = this.x + dx;
+    const y = this.y + dy;
     if (x < 0 || this.map.width <= x) return false;
     else if (y < 0 || this.map.height <= y) return false;
     else if (this.map.noentry[y][x]) return false;

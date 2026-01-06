@@ -22,7 +22,7 @@ type Method = "POST" | "PUT" | "GET" | "DELETE";
 
 const token = { iat: 0, exp: 0, token: "" };
 
-export async function request(method: Method, path: string, post: any = {}): Promise<any> {
+export async function request(method: Method, path: string, post?: any): Promise<any> {
   if (token.iat + token.exp < Date.now() / 1000 - 10) {
     const res = await fetch("/api/auth", {
       method: "GET",
@@ -31,12 +31,17 @@ export async function request(method: Method, path: string, post: any = {}): Pro
     const json = await res.json();
     if (json.error === "無効なトークンです") {
       location.href = "/login";
+    } else {
+      token.iat = Math.floor(Date.now() / 1000);
+      token.exp = json.exp;
+      token.token = json.token;
     }
   }
   const res = await fetch(`/api${path}`, {
     method: method,
+    credentials: "omit",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token.token}` },
-    body: JSON.stringify(post)
+    body: post ? JSON.stringify(post) : undefined
   });
   const json = await res.json();
   if (res.status === 500) {

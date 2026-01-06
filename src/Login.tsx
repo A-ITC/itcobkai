@@ -1,5 +1,4 @@
 import { onMount, Show } from "solid-js";
-import { useNavigate } from "@solidjs/router";
 
 // Discord連携を促す画面
 export default function Login() {
@@ -39,8 +38,6 @@ interface PleaseWaitProps {
   redirect: string;
 }
 function PleaseWait(props: PleaseWaitProps) {
-  const navigate = useNavigate();
-
   async function code2token() {
     const res = await fetch("/api/discord", {
       method: "POST",
@@ -49,16 +46,14 @@ function PleaseWait(props: PleaseWaitProps) {
     });
     const json = await res.json();
     if (res.status === 200) {
-      navigate("/");
-      // location.href = location.href.split("?")[0];
-      // return json;
+      location.replace(import.meta.env.VITE_API_URL);
     } else if (res.status === 400 || res.status === 401) {
       window.alert(`認証に失敗しました: ${json.detail}`);
-      // location.href = `${location.href.split("?")[0]}?mode=auth`;
     } else {
       window.alert("認証中に予期せぬエラーが発生しました。");
-      // location.href = `${location.href.split("?")[0]}?mode=auth`;
     }
+    console.log(props.code, props.redirect);
+    window.history.replaceState({}, "", props.redirect);
   }
 
   onMount(() => {

@@ -20,6 +20,7 @@
     "@solidjs/router": "^0.15.4",
     "@tailwindcss/vite": "^4.1.17",
     "@types/node": "^24.10.1",
+    "dotenv": "^17.2.3",
     "solid-js": "^1.9.10",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",

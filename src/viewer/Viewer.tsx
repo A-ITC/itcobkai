@@ -1,6 +1,7 @@
-import { createSignal, For } from "solid-js";
-import { User } from "../common/Schema";
+import { createSignal, For, onMount } from "solid-js";
+import { request } from "../common/Common";
 import Controller from "./Controller";
+import { User } from "../common/Schema";
 
 const users: User[] = [
   {
@@ -27,23 +28,29 @@ const users: User[] = [
 ];
 
 export default function Main() {
-  const [users, setUsers] = createSignal<User[]>([]);
+  const [users, setUsers] = createSignal<{ [key: string]: User }>({});
   const controller = new Controller();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
 
+  onMount(async () => {
+    console.log("hoge");
+    const res = await request("GET", "/users");
+    console.log(res);
+  });
+
   function connectButton() {
     console.log("Connect button clicked");
-    controller.connect(canvasRef!, audioRef!);
+    controller.start(canvasRef!, audioRef!);
   }
 
   function leaveButton() {
     console.log("Leave button clicked");
-    controller.leave();
+    controller.end();
   }
 
-  controller.onUpdate = (users: User[]) => {
-    setUsers([...users]);
+  controller.onUpdate = users => {
+    setUsers({ ...users });
   };
 
   return (

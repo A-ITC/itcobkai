@@ -1,9 +1,9 @@
 /* @refresh reload */
-import { render } from "solid-js/web";
 import { HashRouter, Route } from "@solidjs/router";
+import { render } from "solid-js/web";
+import Master from "./master/Master";
 import Viewer from "./viewer/Viewer";
 import Login from "./Login";
-import Master from "./master/Master";
 import "./index.css";
 
 window.onload = () => {
@@ -24,6 +24,18 @@ function Router() {
       <Route
         path="/master"
         component={Master}
+      />
+      <Route
+        path="*"
+        component={() => (
+          <div class="text-white p-2">
+            <h1>404 - ページが見つかりません</h1>
+            <p>お探しのページは削除されたか、URLが間違っている可能性があります。</p>
+            <div class="pt-2 underline">
+              <a href="#/">ホームに戻る</a>
+            </div>
+          </div>
+        )}
       />
     </HashRouter>
   );

@@ -1,8 +1,8 @@
-import { build } from "esbuild";
-import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { unlink } from "node:fs/promises";
 import { config } from "dotenv";
+import { build } from "esbuild";
+import { exec } from "node:child_process";
 
 (async () => {
   config({ path: "../.env" });

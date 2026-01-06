@@ -1,6 +1,6 @@
-import { Action } from "../common/Schema";
-import Cropper from "./Cropper";
+import { Action, MapRaw, User } from "../common/Schema";
 import MapCreater from "./MapCreater";
+import Cropper from "./Cropper";
 
 export default class MapController {
   public canvas: HTMLCanvasElement = document.createElement("canvas");
@@ -12,8 +12,10 @@ export default class MapController {
   private keydownHandler?: (e: KeyboardEvent) => void;
   private moveIntervalId = 0;
   private previousPosition = { x: 0, y: 0 };
+  private users: { [key: string]: User } = {};
+  private player: User | undefined;
 
-  public async init(canvas: HTMLCanvasElement, message: (data: any) => {}) {
+  public init(canvas: HTMLCanvasElement, message: (data: any) => void) {
     // 初期化処理
     if (this.resizeHandler && this.keydownHandler) {
       // 以前のイベントリスナーを削除
@@ -50,23 +52,30 @@ export default class MapController {
     this.canvas.addEventListener("keydown", this.keydownHandler);
   }
 
-  public async newMap(id: string) {
+  public async newMap(mapraw: MapRaw) {
     // 新しいマップを作成
-    await this.mc.newMap(id, this.canvas);
+    await this.mc.newMap(mapraw, this.canvas);
+  }
+
+  public setUsers(users: { [key: string]: User }, playerId?: string) {
+    this.users = users;
+    if (playerId) this.player = users[playerId];
+    this.refresh();
   }
 
   private move(dx: number, dy: number) {
     if (this.inThrottle) return false;
     this.inThrottle = true;
     setTimeout(() => (this.inThrottle = false), 100);
-    const { x, y } = this.cropper.get();
-    if (!this.cropper.canMove(x + dx, y + dy)) return false;
-    const user = this.cropper.move(dx, dy);
+    if (!this.cropper.canMove(dx, dy)) return false;
+    const { x, y } = this.cropper.move(dx, dy);
+    this.player!.x = x;
+    this.player!.y = y;
     this.refresh();
   }
 
   public refresh() {
     const { top, left } = this.cropper.get();
-    this.mc.draw([...this.users, player], left, top);
+    this.mc.draw([...Object.values(this.users), this.player!], left, top);
   }
 }
