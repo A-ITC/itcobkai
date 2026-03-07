@@ -1,55 +1,33 @@
 import { createSignal, For, onMount } from "solid-js";
 import { request } from "../common/Common";
-import Controller from "./Controller";
+import Manager from "./ViewerManager";
 import { User } from "../common/Schema";
-
-const users: User[] = [
-  {
-    id: 1,
-    name: "AAAA",
-    info: "DDDD",
-    avatar: "https://via.placeholder.com/40/9CA3AF/FFFFFF",
-    statusColor: "bg-green-400"
-  },
-  {
-    id: 2,
-    name: "BBBB",
-    info: "DDDD",
-    avatar: "https://via.placeholder.com/40/9CA3AF/FFFFFF",
-    statusColor: "bg-yellow-400"
-  },
-  {
-    id: 3,
-    name: "CCCC",
-    info: "DDDD",
-    avatar: "https://via.placeholder.com/40/9CA3AF/FFFFFF",
-    statusColor: "bg-green-400"
-  }
-];
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
-  const controller = new Controller();
+  const [initFlag, setInitFlag] = createSignal(false);
+  const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
 
   onMount(async () => {
-    console.log("hoge");
-    const res = await request("GET", "/users");
+    const res = await request("GET", "/viewer");
+    setInitFlag(true);
+    manager.init(res.h, res.users);
     console.log(res);
   });
 
   function connectButton() {
     console.log("Connect button clicked");
-    controller.start(canvasRef!, audioRef!);
+    manager.start(canvasRef!, audioRef!);
   }
 
   function leaveButton() {
     console.log("Leave button clicked");
-    controller.end();
+    manager.end();
   }
 
-  controller.onUpdate = users => {
+  manager.onUpdate = users => {
     setUsers({ ...users });
   };
 
@@ -60,6 +38,8 @@ export default function Main() {
           <HeaderBar />
           <canvas
             ref={canvasRef}
+            onKeyDown={e => manager.onKeyDown(e)}
+            onResize={e => manager.onResize(e)}
             class="map-grid rounded bg-gray-800 h-64 sm:h-80 md:h-[520px]"
           ></canvas>
           <audio ref={audioRef}></audio>
@@ -140,7 +120,7 @@ function VoicePanel(props: VoicePanelProps) {
         <div class="text-gray-400">—</div>
       </div>
       <div class="users-scroll overflow-y-auto max-h-60 md:max-h-[360px]">
-        <For each={users}>{user => <UserItem user={user} />}</For>
+        {/* <For each={users}>{user => <UserItem user={user} />}</For> */}
         <div class="py-6"></div>
       </div>
     </div>

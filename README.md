@@ -3,20 +3,28 @@
 
 ## 構築手順
 ### 事前準備
-- Discord Developer Portalから新規アプリケーションを作成
+- Discord
+  - eveloper Portalで新規アプリケーションを作成
   - Auth2のClient IDとClient Secretを入手
-- Skywayで新規アカウントを作成
+- Skyway
+  - 新規アカウントを作成
   - アプリケーションIDとシークレットキーを入手
-- AWSでlambdaを作成
+- AWS Lambda
   - Lambdaの関数URLを有効化
-  - タイムアウト設定を15秒程度に設定 (変更しないとログイン中にタイムアウトで500エラーになる)
-- AWSでS3のバケットを作成
+  - タイムアウト設定を15秒程度に設定 (変更しないとログイン処理中にタイムアウトして500エラーになる)
+- AWS S3
+  - バケットを作成
+- Google Slides API
+  - 以下のサイトの手順を踏んでtoken.jsonを取得して`lambda/token.json`に配置する
+  - Google Auth Platform / オーディエンス / 対象 で公開ステータスを「テスト」 から「本番環境」に変更しておく
+  - https://developers.google.com/workspace/slides/api/quickstart/python?hl=ja
+- Tiled
+  - Tiledでマップを作成
 
 ### デプロイ
 ```sh
-# マップを解析/レンダリングしてアップロード
-cd lambda
-npm run build
+# マップをレンダリングしてアップロード
+python3 create_map.py /path/to/map.tmx
 
 # UIをビルドしてアップロード
 npm install
@@ -53,6 +61,14 @@ TOKEN_PASSWORD="[任意のランダムな文字列]"
 TOKEN_EXPIRATION=1800
 ```
 
+### マップの仕様
+- 上下レイヤーの命名規則例:
+  - 上層: t_、top、上
+  - 下層: b_、bottom、下
+- 赤・黒フラグレイヤーの命名規則例:
+  - 赤(侵入禁止): 赤、red
+  - 黒(繋がるエリア): 黒、black
+
 ### AWS ポリシー
 lambda用
 ```json
@@ -73,8 +89,9 @@ lambda用
             "Sid": "VisualEditor1",
             "Effect": "Allow",
             "Action": [
+                "s3:GetObject",
                 "s3:PutObject",
-                "s3:GetObject"
+                "s3:DeleteObject"
             ],
             "Resource": "arn:aws:s3:::S3_BUCKET/*"
         }

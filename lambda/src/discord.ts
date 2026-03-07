@@ -1,5 +1,5 @@
 import { DISCORD_ALLOWED_SERVERS, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET } from "./const";
-import { id7 } from "./utils";
+import { HTTPError, id7 } from "./utils";
 
 export interface DiscordInfo {
   id: string;
@@ -9,21 +9,13 @@ export interface DiscordInfo {
   guild: string[];
 }
 
-class HTTPError extends Error {
-  status: number;
-  body: any;
-  constructor(status: number, body: any) {
-    super(typeof body === "string" ? body : JSON.stringify(body));
-    this.status = status;
-    this.body = body;
+export async function discord(code?: string, redirect?: string): Promise<DiscordInfo> {
+  if (!code || !redirect) {
+    throw new HTTPError(400, "code and redirect are required");
   }
-}
-
-export async function discord(code: string, redirect: string): Promise<DiscordInfo> {
   try {
     const accessToken = await _auth_discord(code, redirect);
-    const guilds = await _check_joined(accessToken);
-    const info = await _get_avatar(accessToken);
+    const [info, guilds] = await Promise.all([_get_avatar(accessToken), _check_joined(accessToken)]);
     info.guild = guilds;
     return info;
   } catch (err) {

@@ -1,4 +1,4 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { APIGatewayProxyResultV2 } from "aws-lambda";
 import { DATA_JSON, S3_BUCKET } from "./const";
 import { Buffer } from "buffer";
@@ -16,11 +16,11 @@ const MIME_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml"
 };
 
-export const readFromS3 = async (bucket: string, key: string, cache = false): Promise<APIGatewayProxyResultV2> => {
+export async function readFromS3(key: string, cache = false): Promise<APIGatewayProxyResultV2> {
   const ext = key.slice(key.lastIndexOf(".")).toLowerCase();
   const contentType = MIME_TYPES[ext] || "text/plain; charset=utf-8";
   const isBinary = contentType.startsWith("image/") || contentType === "application/octet-stream";
-  const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const { Body } = await s3Client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }));
   if (!Body) throw new Error("Empty body");
   const headers = {
     "Content-Type": contentType,
@@ -41,38 +41,36 @@ export const readFromS3 = async (bucket: string, key: string, cache = false): Pr
       body: await Body.transformToString()
     };
   }
-};
+}
 
-export const S3 = {
-  getText: async (bucket: string, key: string): Promise<string> => {
-    try {
-      const command = new GetObjectCommand({ Bucket: bucket, Key: key });
-      const response = await s3Client.send(command);
-      return (await response.Body?.transformToString()) ?? "";
-    } catch (error: any) {
-      if (error.name === "NoSuchKey") {
-        return ""; // ファイルが存在しない場合は空文字を返す
-      }
-      throw error;
-    }
-  },
-  getJson: async (bucket: string, key: string): Promise<any> => {
-    const textContent = await S3.getText(bucket, key);
-    // 空の場合は空のオブジェクトを返す
-    return textContent ? JSON.parse(textContent) : {};
-  },
-  putJson: async (bucket: string, key: string, data: any): Promise<void> => {
-    const command = new PutObjectCommand({
-      Bucket: bucket,
+export async function uploadToS3(key: string, body: any, contentType?: string) {
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
       Key: key,
+      Body: body,
+      ContentType: contentType
+    })
+  );
+}
+
+export async function deleteFromS3(key: string) {
+  await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+}
+
+export async function getData() {
+  const command = new GetObjectCommand({ Bucket: S3_BUCKET, Key: DATA_JSON });
+  const response = await s3Client.send(command);
+  return JSON.parse(await response.Body!.transformToString());
+}
+
+export async function putData(data: any) {
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: DATA_JSON,
       Body: JSON.stringify(data, null, 2),
       ContentType: "application/json"
-    });
-    await s3Client.send(command);
-  }
-};
-
-export const users = {
-  get: () => S3.getJson(S3_BUCKET, DATA_JSON),
-  put: (data: any) => S3.putJson(S3_BUCKET, DATA_JSON, data)
-};
+    })
+  );
+}

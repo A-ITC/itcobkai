@@ -11,13 +11,13 @@ import { exec } from "node:child_process";
     bundle: true,
     platform: "node",
     target: "node24",
-    outfile: "dist/index.mjs",
-    format: "esm",
+    outdir: "dist",
+    format: "cjs",
     sourcemap: true,
     minify: false,
     external: ["@aws-sdk/*"]
   });
-  await promisify(exec)("zip -j dist.zip dist/index.mjs dist/index.mjs.map");
+  await promisify(exec)("zip -j dist.zip dist/index.js dist/index.js.map token.json");
   const cmd = `aws lambda update-function-code --function-name ${process.env.VITE_APP_NAME} --zip-file fileb://dist.zip`;
   const { stdout } = await promisify(exec)(cmd);
   const result = JSON.parse(stdout);

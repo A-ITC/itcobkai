@@ -2,7 +2,15 @@ import { SkyWayAuthToken, nowInSec } from "@skyway-sdk/token";
 import { SKYWAY_ID, SKYWAY_SECRET } from "./const";
 import { randomUUID } from "crypto";
 
-export function createToken() {
+export function viewerToken() {
+  return createToken();
+}
+
+export function masterToken() {
+  return createToken();
+}
+
+function createToken(): string {
   return new SkyWayAuthToken({
     jti: randomUUID(),
     iat: nowInSec(),

@@ -25,7 +25,6 @@ export class JWT {
 export class AuthSession {
   private jwt: JWT;
   private sessionPassword: string;
-  private decodedPayload: Record<string, any> | null = null;
 
   constructor(sessionPassword: string) {
     this.sessionPassword = sessionPassword;
@@ -38,28 +37,26 @@ export class AuthSession {
   }
 
   public verify<T>(key: string, cookies: string[]): T {
-    if (this.decodedPayload === null) {
-      try {
-        let token: string | undefined;
-        for (const cookie of cookies) {
-          const match = cookie.match(/(?<=^token=)[^;]+(?=(;|$))/);
-          if (match) {
-            token = match[0];
-            break;
-          }
+    try {
+      let token: string | undefined;
+      for (const cookie of cookies) {
+        const match = cookie.match(/(?<=^token=)[^;]+(?=(;|$))/);
+        if (match) {
+          token = match[0];
+          break;
         }
-
-        if (!token) {
-          throw new Error("Session token not found");
-        }
-
-        this.decodedPayload = this.jwt.decode(token, this.sessionPassword);
-      } catch (error: any) {
-        console.error(error);
-        throw new HTTPError(401, `無効なセッションです: ${error.message}`);
       }
+
+      if (!token) {
+        throw new Error("Session token not found");
+      }
+
+      const decoded = this.jwt.decode<Record<string, any>>(token, this.sessionPassword);
+      return decoded[key] as T;
+    } catch (error: any) {
+      console.error(error);
+      throw new HTTPError(401, `無効なセッションです: ${error.message}`);
     }
-    return this.decodedPayload[key] as T;
   }
 }
 
@@ -67,7 +64,6 @@ export class AuthToken {
   private jwt: JWT;
   private tokenPassword: string;
   private expiration: number; // 秒
-  private decodedPayload: Record<string, any> | null = null;
 
   constructor(tokenPassword: string, expiration: number = 30 * 60) {
     this.tokenPassword = tokenPassword;
@@ -81,26 +77,25 @@ export class AuthToken {
   }
 
   public verify<T>(key: string, authorization: string): T {
-    if (this.decodedPayload === null) {
-      let tokenValue: string | undefined;
-      try {
-        const parts = authorization.split(" ");
-        if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
-          throw new Error("Invalid Authorization header format");
-        }
-        tokenValue = parts[1];
-
-        this.decodedPayload = this.jwt.decode(tokenValue, this.tokenPassword);
-
-        // 有効期限の確認
-        if (this.decodedPayload.iat && this.decodedPayload.iat + this.expiration < Math.floor(Date.now() / 1000)) {
-          throw new Error("Token expired");
-        }
-      } catch (error: any) {
-        console.error(error);
-        throw new HTTPError(401, `無効なトークンです: ${tokenValue || ""}. ${error.message}`);
+    let tokenValue: string | undefined;
+    try {
+      const parts = authorization.split(" ");
+      if (parts.length !== 2 || parts[0].toLowerCase() !== "bearer") {
+        throw new Error("Invalid Authorization header format");
       }
+      tokenValue = parts[1];
+
+      const decoded = this.jwt.decode<Record<string, any>>(tokenValue, this.tokenPassword);
+
+      // 有効期限の確認
+      if (decoded.iat && decoded.iat + this.expiration < Math.floor(Date.now() / 1000)) {
+        throw new Error("Token expired");
+      }
+
+      return decoded[key] as T;
+    } catch (error: any) {
+      console.error(error);
+      throw new HTTPError(401, `無効なトークンです: ${tokenValue || ""}. ${error.message}`);
     }
-    return this.decodedPayload[key] as T;
   }
 }

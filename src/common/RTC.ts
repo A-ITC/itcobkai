@@ -1,9 +1,11 @@
 import {
   LocalAudioStream,
   LocalDataStream,
+  LocalRoomMember,
   nowInSec,
   RemoteAudioStream,
   Room,
+  RoomPublication,
   SkyWayAuthToken,
   SkyWayContext,
   SkyWayRoom,
@@ -41,11 +43,11 @@ class _Skyway {
 
 export class SkywayMaster extends _Skyway {
   public publicationIds: string[] = [];
-  public onAdd = (_name: string) => {};
+  public onAdd?: (name: string, source: MediaStreamAudioSourceNode, dest: MediaStreamAudioDestinationNode) => void;
   public onDisconnect = (_name: string) => {};
 
   public dataTo: { [member: string]: LocalDataStream } = {};
-  public dataFrom = (_name: string, _data: any) => {};
+  public dataFrom = (_hash: string, _data: any) => {};
 
   public audioFrom: { [member: string]: HTMLAudioElement } = {};
   public audioTo: { [member: string]: HTMLAudioElement } = {};
@@ -127,7 +129,9 @@ export class SkywayMaster extends _Skyway {
     await me.publish(this.dataTo[name], { type: "p2p" });
     await me.publish(stream, { type: "p2p" });
     console.log("connection complete:", name);
-    this.onAdd(name);
+    if (this.onAdd && this.sources[name] && this.dests[name]) {
+      this.onAdd(name, this.sources[name], this.dests[name]);
+    }
   }
 }
 
@@ -137,29 +141,31 @@ export class SkywayViewer extends _Skyway {
   public audioTo: LocalAudioStream | null = null;
   public dataFrom = (_data: any) => {};
   public audioFrom: RemoteAudioStream | null = null;
+  private publication: RoomPublication<LocalAudioStream> | null = null;
+  private myRoom: Room | null = null;
+  private viewer: LocalRoomMember | null = null;
 
   public async init(name: string, audio: HTMLAudioElement) {
     // 自分のroomにpublish
     await this.initContext();
-    const myRoom = await SkyWayRoom.FindOrCreate(this.context!, { name });
-    const viewer = await myRoom.join();
+    this.myRoom = await SkyWayRoom.FindOrCreate(this.context!, { name });
+    this.viewer = await this.myRoom.join();
     this.audioTo = await SkyWayStreamFactory.createMicrophoneAudioStream();
-    await viewer.publish(this.audioTo, { type: "p2p" });
+    this.publication = await this.viewer.publish(this.audioTo, { type: "p2p" });
     this.dataTo = await SkyWayStreamFactory.createDataStream();
-    await viewer.publish(this.dataTo, { type: "p2p" });
+    await this.viewer.publish(this.dataTo, { type: "p2p" });
 
     // masterからのstreamをsubscribe
-    myRoom.onStreamPublished.add(async event => {
-      if (event.publication.publisher.id === viewer.id) return;
+    this.myRoom.onStreamPublished.add(async event => {
+      if (event.publication.publisher.id === this.viewer!.id) return;
       console.log("new stream:", event.publication.id);
-      const { stream, subscription } = await viewer.subscribe(event.publication.id);
+      const { stream, subscription } = await this.viewer!.subscribe(event.publication.id);
       subscription.onConnectionStateChanged.add(async state => {
         if (state === "disconnected") {
           console.log("masterとの接続が切れました。退室します。");
           try {
             // DataStreamとAudioStreamの両方で切断イベントが発生するため片方は必ず失敗する
-            await myRoom.leave(viewer);
-            await myRoom.close();
+            this.end();
             console.log("再接続を試みます");
             await this.init(name, audio);
           } catch (e) {}
@@ -178,5 +184,17 @@ export class SkywayViewer extends _Skyway {
     // masterに知らせる
     const masterRoom = await SkyWayRoom.FindOrCreate(this.context!, { name: "master" });
     await masterRoom.join({ name });
+  }
+
+  public async mute(mute: boolean) {
+    if (!this.publication) return;
+    if (mute) this.publication.disable();
+    else this.publication.enable();
+  }
+
+  public async end() {
+    if (!this.myRoom || !this.viewer) return;
+    await this.myRoom.leave(this.viewer);
+    await this.myRoom.close();
   }
 }

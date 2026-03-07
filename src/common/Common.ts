@@ -61,3 +61,21 @@ export function beep() {
   osc.start();
   setTimeout(() => osc.stop(), 200);
 }
+
+export function loadImage(src: string, img: HTMLImageElement) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+const tickerFuncs: { [key: string]: () => void } = {};
+setInterval(() => Object.values(tickerFuncs).forEach(f => f()), 1000);
+
+export const ticker = new Proxy(tickerFuncs, {
+  set(target, key: string, value: () => void) {
+    target[key] = value;
+    return true;
+  }
+});

@@ -15,8 +15,10 @@
     "printWidth": 120
   },
   "devDependencies": {
-    "esbuild": "^0.27.0",
+    "@googleapis/slides": "^5.0.1",
     "dotenv": "^17.2.3",
+    "esbuild": "^0.27.0",
+    "google-auth-library": "^10.5.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {

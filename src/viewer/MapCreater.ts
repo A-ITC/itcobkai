@@ -1,5 +1,5 @@
 import { Map, MapRaw, User } from "../common/Schema";
-import { storage } from "../common/Common";
+import { loadImage, storage } from "../common/Common";
 
 // Canvasにマップや人物を描画するクラス
 export default class MapCreater {
@@ -8,6 +8,7 @@ export default class MapCreater {
   private bottomImage = new Image();
   private topImage = new Image();
   public map: Map = { area: [], noentry: [], topImage: new Image(), bottomImage: new Image(), width: 0, height: 0 };
+  public avatars: { [key: string]: HTMLImageElement } = {};
 
   constructor() {
     this.ctx = this.canvas.getContext("2d")!;
@@ -40,34 +41,36 @@ export default class MapCreater {
       width: red[0].length,
       height: red.length
     };
-    const load = (src: string, img: HTMLImageElement) =>
-      new Promise<HTMLImageElement>((resolve, reject) => {
-        img.onload = () => resolve(img);
-        img.onerror = reject;
-        img.src = src;
-      });
     await Promise.all([
-      load(`/api/data/map/${mapraw.top}.png`, map.topImage),
-      load(`/api/data/map/${mapraw.bottom}.png`, map.bottomImage)
+      loadImage(`/api/data/map/${mapraw.top}.png`, map.topImage),
+      loadImage(`/api/data/map/${mapraw.bottom}.png`, map.bottomImage)
     ]);
     return map;
   }
 
-  private drawUsers(users: User[], left: number, top: number) {
-    for (let user of users) {
-      if (user.x - left < 0 || storage.outer <= user.x - left) continue;
-      if (user.y - top < 0 || storage.outer <= user.y - top) continue;
-      this.drawUser(user, user.x - left, user.y - top);
+  private async drawUsers(users: User[], left: number, top: number) {
+    const tasks: Promise<void>[] = [];
+    for (const user of users) {
+      const i = user.x - left;
+      const j = user.y - top;
+      if (i < 0 || storage.outer <= i) continue;
+      if (j < 0 || storage.outer <= j) continue;
+      tasks.push(this.drawUser(user, i, j));
     }
+    await Promise.all(tasks);
   }
 
-  private drawUser(user: User, i: number, j: number) {
+  private async drawUser(user: User, i: number, j: number) {
     const grid = this.canvas.width / storage.outer;
     this.ctx.beginPath();
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
     this.ctx.save();
     this.ctx.clip();
-    this.ctx.drawImage(user.avatar, i * grid, j * grid, grid, grid);
+    if (!this.avatars[user.hash] || this.avatars[user.hash].src !== user.avatar) {
+      this.avatars[user.hash] = new Image();
+      await loadImage(user.avatar, this.avatars[user.hash]);
+    }
+    this.ctx.drawImage(this.avatars[user.hash], i * grid, j * grid, grid, grid);
     if (user.mute) {
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       this.ctx.fillRect(i * grid, j * grid, grid, grid);
