@@ -1,0 +1,24 @@
+services:
+  livekit:
+    image: livekit/livekit-server:v1.9.12
+    container_name: livekit
+    restart: unless-stopped
+    network_mode: host
+    env_file:
+      - .env
+    environment:
+      LIVEKIT_CONFIG: |
+        port: ${WS_PORT}
+        log_level: info
+        rtc:
+          tcp_port: ${TCP_PORT}
+          port_range_start: ${UDP_PORT_RANGE_START}
+          port_range_end: ${UDP_PORT_RANGE_END}
+          use_external_ip: true
+        keys:
+          itcobkai: ${SECRET_KEY}
+        turn:
+          enabled: true
+          domain: ${DOMAIN}
+          udp_port: ${UDP_PORT}
+    command: --dev

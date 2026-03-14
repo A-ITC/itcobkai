@@ -12,3 +12,6 @@ dist
 dist.zip
 _*/
 data/
+token.json
+.python-version
+.venv

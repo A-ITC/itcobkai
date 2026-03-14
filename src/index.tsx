@@ -5,6 +5,7 @@ import Master from "./master/Master";
 import Viewer from "./viewer/Viewer";
 import Login from "./Login";
 import "./index.css";
+import Test from "./Test";
 
 window.onload = () => {
   render(() => <Router />, document.getElementById("root")!);
@@ -20,6 +21,10 @@ function Router() {
       <Route
         path="/login"
         component={Login}
+      />
+      <Route
+        path="/test"
+        component={Test}
       />
       <Route
         path="/master"
