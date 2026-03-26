@@ -1,37 +1,4 @@
-#!/usr/bin/env python3
-
-from json import dumps, loads
-from base64 import b64decode, b64encode
-from typing import TypedDict
-from hashlib import sha256
 from hashlib import blake2b
-from .config import SECRET_KEY
-from urllib.parse import quote, unquote
-
-
-class Session(TypedDict):
-    h: str
-    iat: int
-
-
-class Jwt:
-    def encode(self, payload: Session) -> str:
-        b64 = b64encode(dumps(payload).encode("utf-8")).decode("utf-8")
-        signature = self._create_hash(b64 + SECRET_KEY)
-        return quote(f"{b64}.{signature}")
-
-    def decode(self, token: str) -> Session:
-        try:
-            b64_str, signature = unquote(token).split(".", 1)
-        except ValueError:
-            raise ValueError("Invalid token format")
-        if self._create_hash(b64_str + SECRET_KEY) != signature:
-            raise PermissionError("Invalid signature")
-        return loads(b64decode(b64_str).decode("utf-8"))
-
-    def _create_hash(self, text: str) -> str:
-        digest = sha256(text.encode("utf-8")).digest()
-        return b64encode(digest).decode("utf-8")
 
 
 class CustomError(Exception):

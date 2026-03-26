@@ -1,37 +1,30 @@
 from httpx import AsyncClient
+from .user import User
 from .utils import id7
 from asyncio import gather
+from hashlib import sha256
 from fastapi import HTTPException
-from .config import DISCORD_ALLOWED_SERVERS, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET
-from dataclasses import dataclass, field
+from .config import (
+    AVATAR_DIR,
+    DISCORD_ALLOWED_SERVERS,
+    DISCORD_CLIENT_ID,
+    DISCORD_CLIENT_SECRET,
+)
+from pathlib import Path
 
 
-@dataclass(frozen=True)
-class DiscordInfo:
-    id: str
-    hash: str
-    name: str | None
-    avatar: str | None
-    guild: list[str] = field(default_factory=list)
-
-
-async def discord(code: str | None = None, redirect: str | None = None) -> DiscordInfo:
+async def discord(code: str | None = None, redirect: str | None = None) -> User:
     if not code or not redirect:
         raise HTTPException(400, "code and redirect are required")
     async with AsyncClient() as client:
         try:
             access_token = await _auth_discord(client, code, redirect)
-            info, guilds = await gather(
+            info, _ = await gather(
                 _get_avatar_data(client, access_token),
                 _check_joined(client, access_token),
             )
-            return DiscordInfo(
-                id=info["id"],
-                hash=info["hash"],
-                name=info["name"],
-                avatar=info["avatar"],
-                guild=guilds,
-            )
+            avatar = await _get_avatar_base64(client, info["id"], info["avatar"])
+            return User(h=info["hash"], name=info["name"], avatar=avatar)
         except HTTPException:
             raise
         except Exception as err:
@@ -101,3 +94,16 @@ async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:
         return server_names
 
     raise HTTPException(401, "server not allowed")
+
+
+async def _get_avatar_base64(client: AsyncClient, id: str, avatar: str) -> str:
+    url = f"https://cdn.discordapp.com/avatars/{id}/{avatar}.webp"
+    response = await client.get(url)
+    response.raise_for_status()
+    content = response.content
+    hash = sha256(content).hexdigest()
+    avatar_dir = Path(AVATAR_DIR)
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+    file_path = avatar_dir / f"{hash}.webp"
+    file_path.write_bytes(content)
+    return hash

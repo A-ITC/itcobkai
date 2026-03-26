@@ -61,24 +61,25 @@ def create_token(identity: str, room_name: str) -> str:
     return token.to_jwt()
 
 
-# --- イベントハンドラ ---
-def on_message(user: str, message: dict):
-    print(f"Message from {user}: {message}")
+def connects(islands: list[list[str]]):
+    global current_islands
+    current_islands = islands
 
 
-def on_join(user: str):
-    print(f"User joined: {user}")
-
-
-async def send_message(user: str, message: dict):
+async def send_raw_message(user: str, message: dict):
     if session := active_sessions.get(user):
         await session.room.local_participant.publish_data(
             payload=json.dumps(message).encode("utf-8")
         )
 
 
-# --- コアロジック ---
-async def process_user_audio(session: UserSession, track: Track):
+handler = {
+    "on_message": lambda user, message: None,
+    "on_join": lambda user: None,
+}
+
+
+async def _process_user_audio(session: UserSession, track: Track):
     """受信した音声をキューに詰める（受信側の処理）"""
     audio_stream = AudioStream(track)
     async for event in audio_stream:
@@ -102,20 +103,20 @@ async def _setup_bot_in_room(room_name: str, username: str):
         participant: RemoteParticipant,
     ):
         if track.kind == TrackKind.KIND_AUDIO:
-            create_task(process_user_audio(session, track))
+            create_task(_process_user_audio(session, track))
 
     @room.on("data_received")
-    def on_data(data: DataPacket):
+    async def on_data(data: DataPacket):
         if data.participant:
             try:
                 msg = json.loads(data.data.decode())
-                on_message(data.participant.identity, msg)
+                await handler["on_message"](data.participant.identity, msg)
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
     @room.on("participant_connected")
-    def on_participant_connected(participant: RemoteParticipant):
-        on_join(participant.identity)
+    async def on_participant_connected(participant: RemoteParticipant):
+        await handler["on_join"](participant.identity)
 
     bot_token = create_token("python-bot", room_name)
     await room.connect(f"wss://{DOMAIN}", bot_token)
@@ -192,8 +193,3 @@ async def init_room(name: str):
 
     create_task(_setup_bot_in_room(name, name))
     return {"token": create_token(name, name)}
-
-
-def connects(islands: list[list[str]]):
-    global current_islands
-    current_islands = islands

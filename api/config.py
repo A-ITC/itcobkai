@@ -5,6 +5,13 @@ load_env()
 
 APP_NAME = "itcobkai"
 TTL = 60 * 60
+LOG_LEVEL = 20
+
+# ディレクトリ/ファイル関連
+LOG_DIR = "data/log"
+AVATAR_DIR = "data/avatars"
+MAP_DIR = "data/maps"
+USERS_JSON = "data/users.json"
 
 # Discord OAuth2関連
 DISCORD_CLIENT_ID = environ.get("VITE_DISCORD_CLIENT_ID")
@@ -19,6 +26,3 @@ API_PORT = int(environ.get("API_PORT", 41022))
 
 # LiveKit関連
 DOMAIN = environ.get("DOMAIN")
-
-LOG_LEVEL = 20
-LOG_DIR = "data/log"
