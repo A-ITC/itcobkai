@@ -1,7 +1,7 @@
-from dotenv import load_env
+from dotenv import load_dotenv
 from os import environ
 
-load_env()
+load_dotenv()
 
 APP_NAME = "itcobkai"
 TTL = 60 * 60

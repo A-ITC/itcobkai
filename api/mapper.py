@@ -48,6 +48,7 @@ class Mapper:
         self.user_positions: dict[str, Position] = {}
         self.last_connections: set[Connection] = set()
         self.last_moves: dict[str, Position] = {}
+        self._meta: dict = {}
 
     def _label_islands(self):
         island_count = 0
@@ -87,10 +88,17 @@ class Mapper:
         self.last_moves[h] = (x, y)
         return Move(h=h, x=x, y=y)
 
+    def remove_user(self, h: str):
+        self.user_positions.pop(h, None)
+        self.last_moves.pop(h, None)
+
     def move(self, h: str, x: int, y: int):
         if 0 <= x < self.width and 0 <= y < self.height and not self.noentry[y][x]:
             self.user_positions[h] = (x, y)
             self.last_moves[h] = (x, y)
+
+    def get_map_meta(self) -> dict:
+        return {**self._meta, "width": self.width, "height": self.height}
 
     def last_updated(self):
         current_connections = self._calculate_current_connections()
@@ -158,4 +166,39 @@ class Mapper:
         return connections
 
 
-mapper = Mapper()
+# マッパーのグローバルインスタンス（init_mapper で初期化）
+mapper: Mapper | None = None
+
+
+def init_mapper(map_raw: MapRaw, meta: dict):
+    """マップデータからマッパーを初期化する（NEWMAP 時にも呼び出し可能）"""
+    global mapper
+    m = Mapper(map_raw)
+    m._meta = meta
+    mapper = m
+
+
+def connections_to_islands(connections: "set[Connection]") -> list[list[str]]:
+    """接続ペアの集合から島グループ（連結成分）を計算する"""
+    adj: dict[str, set[str]] = {}
+    for u_a, u_b in connections:
+        adj.setdefault(u_a, set()).add(u_b)
+        adj.setdefault(u_b, set()).add(u_a)
+
+    visited: set[str] = set()
+    islands: list[list[str]] = []
+    for user in adj:
+        if user in visited:
+            continue
+        component: list[str] = []
+        stack = [user]
+        visited.add(user)
+        while stack:
+            u = stack.pop()
+            component.append(u)
+            for neighbor in adj[u]:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    stack.append(neighbor)
+        islands.append(component)
+    return islands

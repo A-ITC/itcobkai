@@ -24,6 +24,7 @@ from livekit.api import (
     ListParticipantsRequest,
     RoomParticipantIdentity,
     CreateRoomRequest,
+    DeleteRoomRequest,
 )
 from .config import APP_NAME, DOMAIN, SECRET_KEY
 
@@ -48,8 +49,44 @@ class UserSession:
 # グローバル管理
 active_sessions: dict[str, UserSession] = {}
 current_islands: list[list[str]] = []
+muted_users: set[str] = set()
 
-lkapi = LiveKitAPI(f"wss://{DOMAIN}", APP_NAME, SECRET_KEY)
+
+class _LkApi:
+    """LiveKitAPI の遅延初期化プロキシ。
+
+    import 時点ではイベントループが存在しないため、aiohttp.ClientSession の生成を
+    最初のアクセス時まで遅らせる。既存の `lkapi.room.xxx` / `lkapi.aclose()` の
+    呼び出しは変更不要。
+    テスト等でイベントループが変わった場合は自動的に再生成する。
+    """
+
+    def __init__(self):
+        self._api: "LiveKitAPI | None" = None
+        self._loop = None
+
+    def _get(self) -> "LiveKitAPI":
+        try:
+            current_loop = get_event_loop()
+        except RuntimeError:
+            current_loop = None
+        # イベントループが変わった場合は古いAPIを破棄して再生成する
+        if self._api is None or self._loop is not current_loop:
+            self._api = LiveKitAPI(f"wss://{DOMAIN}", APP_NAME, SECRET_KEY)
+            self._loop = current_loop
+        return self._api
+
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)
+
+    async def aclose(self):
+        if self._api:
+            await self._api.aclose()
+            self._api = None
+            self._loop = None
+
+
+lkapi = _LkApi()
 
 
 def create_token(identity: str, room_name: str) -> str:
@@ -66,6 +103,13 @@ def connects(islands: list[list[str]]):
     current_islands = islands
 
 
+def set_mute(h: str, muted: bool):
+    if muted:
+        muted_users.add(h)
+    else:
+        muted_users.discard(h)
+
+
 async def send_raw_message(user: str, message: dict):
     if session := active_sessions.get(user):
         await session.room.local_participant.publish_data(
@@ -76,6 +120,7 @@ async def send_raw_message(user: str, message: dict):
 handler = {
     "on_message": lambda user, message: None,
     "on_join": lambda user: None,
+    "on_leave": lambda user: None,
 }
 
 
@@ -106,17 +151,22 @@ async def _setup_bot_in_room(room_name: str, username: str):
             create_task(_process_user_audio(session, track))
 
     @room.on("data_received")
-    async def on_data(data: DataPacket):
+    def on_data(data: DataPacket):
         if data.participant:
             try:
                 msg = json.loads(data.data.decode())
-                await handler["on_message"](data.participant.identity, msg)
+                create_task(handler["on_message"](data.participant.identity, msg))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
     @room.on("participant_connected")
-    async def on_participant_connected(participant: RemoteParticipant):
-        await handler["on_join"](participant.identity)
+    def on_participant_connected(participant: RemoteParticipant):
+        create_task(handler["on_join"](participant.identity))
+
+    @room.on("participant_disconnected")
+    def on_participant_disconnected(participant: RemoteParticipant):
+        active_sessions.pop(participant.identity, None)
+        create_task(handler["on_leave"](participant.identity))
 
     bot_token = create_token("python-bot", room_name)
     await room.connect(f"wss://{DOMAIN}", bot_token)
@@ -150,11 +200,11 @@ async def mixing_loop():
                 if not session:
                     continue
 
-                # 自分以外の音声を合成
+                # 自分以外のミュートしていないユーザーの音声を合成
                 others = [
                     active_sessions[u].last_frame
                     for u in island
-                    if u != target_user and u in active_sessions
+                    if u != target_user and u in active_sessions and u not in muted_users
                 ]
 
                 if not others:
@@ -176,20 +226,15 @@ async def mixing_loop():
 
 
 async def init_room(name: str):
-    # 既存ルームの確認とキック
-    # api.room 経由で RoomServiceClient の機能にアクセスできます
+    # 既存ルームを削除して完全にリセット（前回の接続状態が残らないようにする）
     res = await lkapi.room.list_rooms(ListRoomsRequest(names=[name]))
     if res.rooms:
-        # 接続者をキック
-        p_res = await lkapi.room.list_participants(ListParticipantsRequest(room=name))
-        for p in p_res.participants:
-            await lkapi.room.remove_participant(
-                RoomParticipantIdentity(room=name, identity=p.identity)
-            )
+        await lkapi.room.delete_room(DeleteRoomRequest(room=name))
         await sleep(0.5)
 
     # ルーム作成
     await lkapi.room.create_room(CreateRoomRequest(name=name))
 
-    create_task(_setup_bot_in_room(name, name))
+    # ボットがルームに接続完了してから返す（ユーザー接続前にボットが確実に存在するようにする）
+    await _setup_bot_in_room(name, name)
     return {"token": create_token(name, name)}
