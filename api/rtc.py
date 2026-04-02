@@ -155,6 +155,7 @@ async def _setup_bot_in_room(room_name: str, username: str):
         if data.participant:
             try:
                 msg = json.loads(data.data.decode())
+                print(data.participant.identity, msg)
                 create_task(handler["on_message"](data.participant.identity, msg))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
@@ -204,7 +205,9 @@ async def mixing_loop():
                 others = [
                     active_sessions[u].last_frame
                     for u in island
-                    if u != target_user and u in active_sessions and u not in muted_users
+                    if u != target_user
+                    and u in active_sessions
+                    and u not in muted_users
                 ]
 
                 if not others:

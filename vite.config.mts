@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 const isBuild = process.argv.includes("build");
 const env = loadEnv("production", process.cwd(), "");
+const pathPrefix = isBuild ? "itcobkai" : "dev";
 
 export default defineConfig({
   server: {
@@ -20,6 +21,6 @@ export default defineConfig({
     target: "esnext",
     manifest: true
   },
-  base: `https://${env.DOMAIN}/${isBuild ? "itcobkai" : "dev"}`,
+  base: `https://${env.DOMAIN}/${pathPrefix}`,
   plugins: [tailwindcss(), solidPlugin()]
 });

@@ -1,10 +1,12 @@
 {
   "name": "itcobkai",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.2",
   "description": "",
   "scripts": {
     "start": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test:ui": "vitest run",
+    "test:ui:watch": "vitest"
   },
   "prettier": {
     "trailingComma": "none",
@@ -16,18 +18,20 @@
     "printWidth": 120
   },
   "devDependencies": {
-    "@skyway-sdk/room": "^2.2.1",
     "@solidjs/router": "^0.15.4",
+    "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.1.17",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^24.10.1",
     "dotenv": "^17.2.3",
+    "happy-dom": "^20.8.9",
+    "livekit-client": "^2.17.2",
     "solid-js": "^1.9.10",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3",
     "vite": "^7.2.4",
-    "vite-plugin-solid": "^2.11.10"
-  },
-  "dependencies": {
-    "livekit-client": "^2.17.2"
+    "vite-plugin-solid": "^2.11.10",
+    "vitest": "^4.1.2"
   }
 }

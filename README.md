@@ -1,125 +1,75 @@
 # 概要
-サークルのOB会を大人数で行うために作成したボイスチャットです
+サークルのOB会を大人数で行うために作成したボイスチャットです。
+
+2Dタイルベースのマップ上の位置（近接性）によって、ユーザー間のボイスチャットグループを自動的に決定します。
+
+## アーキテクチャ
+
+```
+SolidJS フロントエンド ──HTTP/JWT──▶  FastAPI バックエンド (Python 3.12+)
+                     ──WebRTC────▶  LiveKit サーバー (Docker)
+```
 
 ## 構築手順
+
 ### 事前準備
-- Discord
-  - eveloper Portalで新規アプリケーションを作成
-  - Auth2のClient IDとClient Secretを入手
-- Tiled
-  - Tiledでマップを作成
-- 独自ドメイン
-  - WebRTCの要件であるTLS化のために必要
 
-### デプロイ
-```sh
-# マップをレンダリングしてアップロード
-python3 create_map.py /path/to/map.tmx
-
-# UIをビルドしてアップロード
-npm install
-npm run build
-
-# Lambda用関数をビルドしてデプロイ
-cd lambda
-npm run build
-```
-ビルド後、`VITE_API_RUL`にアクセスする
+- **Discord**: Developer Portal で新規アプリケーションを作成し、OAuth2 の Client ID と Client Secret を取得
+- **Tiled**: Tiled でマップ (.tmx) を作成
+- **独自ドメイン**: WebRTC に必要な TLS 化のために必要
+- **Docker**: LiveKit サーバーの起動に必要
 
 ### 環境変数
-プロジェクト直下に`.env`を作成してください
+
+プロジェクト直下に `.env` を作成してください。
 
 ```sh
-# AWS関連
-VITE_APP_NAME="[lambdaの関数名]"
-VITE_API_URL="https://[lambdaの関数URLのアドレス]/"
-VITE_S3_BUCKET="[HTMLやJavascript/CSSを格納するS3のバケット名]"
-DATA_JSON="[ユーザ情報やマップ情報を格納しているJSONファイル]"
+# 公開ドメイン（TLS/TURN 用）
+DOMAIN="your.domain.example"
 
-# Discord OAuth2関連
-VITE_DISCORD_CLIENT_ID="[DiscordのClient ID]"
-DISCORD_CLIENT_SECRET="[DiscordのSecretキー]"
+# LiveKit API キー + JWT 署名用
+SECRET_KEY="[ランダムな文字列]"
+
+# Discord OAuth2 関連
+VITE_DISCORD_CLIENT_ID="[Discord の Client ID]"
+DISCORD_CLIENT_SECRET="[Discord の Client Secret]"
 DISCORD_ALLOWED_SERVERS="サーバ名1:サーバID1(数字18桁),サーバ名2:サーバID2,..."
 
-# SkyWay関連
-VITE_SKYWAY_ID="[SKYWAYのID]"
-SKYWAY_SECRET="[SKYWAYのシークレットキー]"
- 
 # 認証関連
 SESSION_PASSWORD="[任意のランダムな文字列]"
 TOKEN_PASSWORD="[任意のランダムな文字列]"
 TOKEN_EXPIRATION=1800
 ```
 
+オプション: `API_PORT`（デフォルト 41022）、`DEV_PORT`、`WS_PORT`、`TCP_PORT`、`UDP_PORT_RANGE_*`、`VITE_APP_NAME`
+
+### デプロイ
+
+```sh
+# LiveKit サーバーを起動
+docker compose up -d
+
+# マップを処理
+uv run create_map.py /path/to/map.tmx
+
+# バックエンドを起動
+uv run main.py
+
+# フロントエンドをビルド
+npm install
+npm run build
+```
+
 ### マップの仕様
-- 上下レイヤーの命名規則例:
-  - 上層: t_、top、上
-  - 下層: b_、bottom、下
-- 赤・黒フラグレイヤーの命名規則例:
-  - 赤(侵入禁止): 赤、red
-  - 黒(繋がるエリア): 黒、black
 
-### AWS ポリシー
-lambda用
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:REGION:ACCOUNT_ID:log-group:/aws/lambda/FUNCTION_NAME:*"
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": "arn:aws:s3:::S3_BUCKET/*"
-        }
-    ]
-}
-```
+レイヤーの命名規則:
 
-AWS CLI用
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "VisualEditor0",
-            "Effect": "Allow",
-            "Action": [
-                "lambda:UpdateFunctionCode",
-                "lambda:UpdateFunctionConfiguration"
-            ],
-            "Resource": [
-                "arn:aws:lambda:REGION:ACCOUNT_ID:function:FUNCTION_NAME"
-            ]
-        },
-        {
-            "Sid": "VisualEditor1",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": [
-                "arn:aws:s3:::S3_BUCKET/*",
-            ]
-        }
-    ]
-}
-```
+| 種別         | 命名例                   | 用途               |
+| :----------- | :----------------------- | :----------------- |
+| 前景レイヤー | `t_`、`top`、`上`        | キャラの前面に描画 |
+| 背景レイヤー | `b_`、`bottom`、`下`     | キャラの背面に描画 |
+| 黒レイヤー   | `黒`、`black`            | 移動不可エリア     |
+| 赤レイヤー   | `赤`、`red`              | 音声グループの定義 |
 
 # その他
 マップの素材は[ドット絵世界](http://yms.main.jp)さんからお借りしています。

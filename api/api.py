@@ -5,13 +5,14 @@ from livekit.api import RoomParticipantIdentity
 from .auth import auth, encode, decode
 from pathlib import Path
 from logging import getLogger
-from asyncio import create_task, sleep
+from asyncio import create_task, sleep, gather
 from .config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME
 from .mapper import MapRaw, init_mapper, connections_to_islands
 from . import mapper as mapper_module
 from .adapter import HostCommand, send_message_all
 from fastapi import FastAPI, APIRouter, Depends, Request, HTTPException
 from .discord import discord
+from .user import us
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, FileResponse
@@ -35,12 +36,13 @@ async def _position_ticker():
         connects(islands)
         if result["moves"]:
             moves = [{"h": mv.h, "x": mv.x, "y": mv.y} for mv in result["moves"]]
-            await send_message_all(HostCommand.MOVE, {"moves": moves})
+            await send_message_all(HostCommand.MOVED, {"moves": moves})
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("start lifespan")
+    us.load()
     with open(_DATA_JSON) as f:
         data = json_load(f)
     maps = data.get("maps", {})
@@ -53,10 +55,19 @@ async def lifespan(app: FastAPI):
         }
         init_mapper(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
         logger.info(f"map initialized: {map_name}")
-    create_task(mixing_loop())
-    create_task(_position_ticker())
+    mixing_task = create_task(mixing_loop())
+    ticker_task = create_task(_position_ticker())
     yield
     logger.info("end lifespan")
+    mixing_task.cancel()
+    ticker_task.cancel()
+    await gather(mixing_task, ticker_task, return_exceptions=True)
+    for session in list(active_sessions.values()):
+        try:
+            await session.room.disconnect()
+        except Exception:
+            pass
+    active_sessions.clear()
     await lkapi.aclose()
 
 
@@ -67,7 +78,7 @@ class InitRequest(BaseModel):
 @router.post("/api/init")
 async def init(h=Depends(auth)):
     await init_room(h)
-    return {"token": create_token(h, h)}
+    return {"token": create_token(h, h), "h": h}
 
 
 class SessionRequest(BaseModel):
@@ -81,7 +92,23 @@ async def session(post: SessionRequest):
     response = JSONResponse(content={"ok": True})
     response.set_cookie(
         key="session",
-        value=encode({"h": info.id}),
+        value=encode({"h": info.h}),
+        httponly=True,
+        samesite="strict",
+        secure=True,
+        max_age=365 * 24 * 60 * 60,
+    )
+    return response
+
+
+@router.post("/api/discord")
+async def discord_login(post: SessionRequest):
+    info = await discord(post.code, post.redirect)
+    us.upsert(info)
+    response = JSONResponse(content={"ok": True})
+    response.set_cookie(
+        key="session",
+        value=encode({"h": info.h}),
         httponly=True,
         samesite="strict",
         secure=True,
@@ -93,7 +120,12 @@ async def session(post: SessionRequest):
 @router.get("/api/token")
 def token(request: Request):
     session_cookie = request.cookies.get("session")
-    session = decode(session_cookie)
+    if not session_cookie:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        session = decode(session_cookie)
+    except (ValueError, PermissionError):
+        raise HTTPException(status_code=401, detail="Invalid session")
     return {"token": encode({"h": session["h"], "iat": int(time())}), "ttl": TTL}
 
 
@@ -167,7 +199,7 @@ async def master_endpoint(request: Request, post: MasterRequest):
                 moves.append({"h": move.h, "x": move.x, "y": move.y})
             await send_message_all(HostCommand.NEWMAP, {"map": m.get_map_meta()})
             if moves:
-                await send_message_all(HostCommand.MOVE, {"moves": moves})
+                await send_message_all(HostCommand.MOVED, {"moves": moves})
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:
@@ -181,10 +213,9 @@ async def master_endpoint(request: Request, post: MasterRequest):
         return {"ok": True}
 
     if post.command == "USERS":
-        from .adapter import us as user_store
         users = []
         for session_h in list(active_sessions.keys()):
-            user = user_store.get(session_h)
+            user = us.get(session_h)
             users.append({"h": session_h, "name": user.name if user else ""})
         return {"users": users}
 

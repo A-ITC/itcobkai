@@ -1,18 +1,17 @@
 from . import mapper as mapper_module
 from .rtc import set_mute
-from .user import User, UserStore
+from .user import User, us
 
 from .adapter import (
     GuestCommand,
     HostCommand,
     send_message,
     send_message_all,
+    send_message_others,
     on_message,
     on_join,
     on_leave,
 )
-
-us = UserStore()
 
 
 @on_message
@@ -30,13 +29,15 @@ async def _(h: str, message: dict):
                 if pos:
                     user.x, user.y = pos.x, pos.y
                 us.upsert(user)
-                await send_message_all(HostCommand.UPDATE, {"user": user.model_dump()})
+                await send_message_others(
+                    h, HostCommand.UPDATED, {"user": user.model_dump()}
+                )
             except Exception:
                 raise ValueError("Invalid user data")
         case GuestCommand.MUTE:
             muted = bool(message["mute"])
             set_mute(h, muted)
-            await send_message_all(HostCommand.UPDATE, {"h": h, "mute": muted})
+            await send_message_others(h, HostCommand.MUTED, {"h": h, "mute": muted})
         case _:
             raise NotImplementedError("on_message handler is not implemented")
 
@@ -70,7 +71,7 @@ async def _(h: str):
     # 既存ユーザーへ JOIN ブロードキャスト
     user = us.get(h)
     if user:
-        await send_message_all(HostCommand.JOIN, {"user": user.model_dump()})
+        await send_message_others(h, HostCommand.JOINED, {"user": user.model_dump()})
 
 
 @on_leave
@@ -78,4 +79,4 @@ async def _(h: str):
     m = mapper_module.mapper
     if m:
         m.remove_user(h)
-    await send_message_all(HostCommand.LEAVE, {"h": h})
+    await send_message_all(HostCommand.LEFT, {"h": h})

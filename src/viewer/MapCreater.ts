@@ -18,6 +18,7 @@ export default class MapCreater {
   public async newMap(mapraw: MapRaw, canvas: HTMLCanvasElement) {
     // 新しいマップを作成
     this.canvas = canvas;
+    this.ctx = this.canvas.getContext("2d")!;
     this.map = await this.loadMap(mapraw);
   }
 
@@ -42,8 +43,8 @@ export default class MapCreater {
       height: red.length
     };
     await Promise.all([
-      loadImage(`/api/data/map/${mapraw.top}.png`, map.topImage),
-      loadImage(`/api/data/map/${mapraw.bottom}.png`, map.bottomImage)
+      loadImage(`/dist/images/${mapraw.top}`, map.topImage),
+      loadImage(`/dist/images/${mapraw.bottom}`, map.bottomImage)
     ]);
     return map;
   }
@@ -66,11 +67,12 @@ export default class MapCreater {
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
     this.ctx.save();
     this.ctx.clip();
-    if (!this.avatars[user.hash] || this.avatars[user.hash].src !== user.avatar) {
-      this.avatars[user.hash] = new Image();
-      await loadImage(user.avatar, this.avatars[user.hash]);
+    const avatarUrl = `/dist/images/${user.avatar}`;
+    if (!this.avatars[user.h] || this.avatars[user.h].src !== avatarUrl) {
+      this.avatars[user.h] = new Image();
+      await loadImage(avatarUrl, this.avatars[user.h]);
     }
-    this.ctx.drawImage(this.avatars[user.hash], i * grid, j * grid, grid, grid);
+    this.ctx.drawImage(this.avatars[user.h], i * grid, j * grid, grid, grid);
     if (user.mute) {
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       this.ctx.fillRect(i * grid, j * grid, grid, grid);
@@ -79,9 +81,9 @@ export default class MapCreater {
   }
 
   private drawTop(left: number, top: number) {
-    const imgGrid = this.topImage.width / this.map.width;
+    const imgGrid = this.map.topImage.width / this.map.width;
     this.ctx.drawImage(
-      this.topImage,
+      this.map.topImage,
       imgGrid * left,
       imgGrid * top,
       imgGrid * storage.outer,
@@ -95,9 +97,9 @@ export default class MapCreater {
   }
 
   private drawBottom(left: number, top: number) {
-    const imgGrid = this.bottomImage.width / this.map.width;
+    const imgGrid = this.map.bottomImage.width / this.map.width;
     this.ctx.drawImage(
-      this.bottomImage,
+      this.map.bottomImage,
       imgGrid * left,
       imgGrid * top,
       imgGrid * storage.outer,

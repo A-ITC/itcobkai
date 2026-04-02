@@ -1,4 +1,4 @@
-from json import dump
+from json import dump, load as json_load
 from typing import Literal
 from .config import USERS_JSON
 from pydantic import BaseModel, Field
@@ -31,3 +31,17 @@ class UserStore:
         if user:
             user.x = x
             user.y = y
+
+    def load(self):
+        """data/users.json からユーザーデータを読み込む"""
+        try:
+            with open(USERS_JSON) as f:
+                users = json_load(f)
+            for u in users:
+                user = User.model_validate(u)
+                self._users[user.h] = user
+        except (FileNotFoundError, ValueError):
+            pass
+
+
+us = UserStore()

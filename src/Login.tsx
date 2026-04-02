@@ -4,7 +4,7 @@ import { onMount, Show } from "solid-js";
 export default function Login() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
-  const redirect = `${location.origin}/#/login`;
+  const redirect = `${location.origin}${location.pathname}#/login`;
 
   return (
     <div class="text-gray-200">
@@ -46,7 +46,7 @@ function PleaseWait(props: PleaseWaitProps) {
     });
     const json = await res.json();
     if (res.status === 200) {
-      location.replace(import.meta.env.VITE_API_URL);
+      location.replace(`${location.origin}${location.pathname}`);
     } else if (res.status === 400 || res.status === 401) {
       window.alert(`認証に失敗しました: ${json.detail}`);
     } else {

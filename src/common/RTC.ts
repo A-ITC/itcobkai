@@ -7,27 +7,82 @@ import {
   Track,
   DataPacket_Kind
 } from "livekit-client";
+import { HostMessage, GuestMessage } from "./Schema";
+import { beep } from "./Common";
 
-const room = new Room({
-  adaptiveStream: true,
-  dynacast: true
-});
+export class RTCClient {
+  private room: Room | null = null;
+  public dataFrom?: (data: HostMessage) => Promise<void>;
+  public dataTo?: { write: (data: GuestMessage) => void };
+  public onDisconnect?: () => void;
+
+  public async init(token: string, _audio: HTMLAudioElement) {
+    await beep();
+
+    this.room = new Room({
+      adaptiveStream: true,
+      dynacast: true
+    });
+
+    this.room.on(
+      RoomEvent.TrackSubscribed,
+      (track: RemoteTrack, _publication: RemoteTrackPublication, _participant: RemoteParticipant) => {
+        if (track.kind === Track.Kind.Audio) {
+          const element = track.attach();
+          document.body.appendChild(element);
+        }
+      }
+    );
+
+    this.room.on(
+      RoomEvent.DataReceived,
+      (payload: Uint8Array, _participant?: RemoteParticipant, _kind?: DataPacket_Kind, _topic?: string) => {
+        const data: HostMessage = JSON.parse(new TextDecoder().decode(payload));
+        this.dataFrom?.(data);
+      }
+    );
+
+    this.room.on(RoomEvent.Disconnected, () => {
+      this.dataTo = undefined;
+      this.onDisconnect?.();
+    });
+
+    await this.room.connect(`wss://${location.hostname}`, token);
+    await this.room.localParticipant.setMicrophoneEnabled(true);
+
+    const room = this.room;
+    this.dataTo = {
+      write: (data: GuestMessage) => {
+        const encoded = new TextEncoder().encode(JSON.stringify(data));
+        room.localParticipant.publishData(encoded, { reliable: true });
+      }
+    };
+  }
+
+  public async mute(muted: boolean) {
+    if (this.room) {
+      await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    }
+  }
+
+  public end() {
+    if (this.room) {
+      this.room.disconnect();
+      this.room = null;
+      this.dataTo = undefined;
+    }
+  }
+}
 
 export const sendData = async (payload: object) => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(JSON.stringify(payload));
-  await room.localParticipant.publishData(data, {
-    reliable: true,
-    topic: "chat"
-  });
+  console.warn("sendData is deprecated. Use RTCClient.dataTo.write instead.");
 };
 
 export async function joinRoom(token: string, receiveData: (userId: string, payload: object) => void) {
+  const room = new Room({ adaptiveStream: true, dynacast: true });
   await room.connect(`wss://${location.hostname}`, token);
-  console.log("Connected to room:", room.name);
 
   await room.localParticipant.setMicrophoneEnabled(true);
-  console.log("Microphone published");
 
   room.on(
     RoomEvent.TrackSubscribed,

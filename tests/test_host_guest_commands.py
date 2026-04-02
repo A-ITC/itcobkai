@@ -4,20 +4,22 @@ LiveKit を使用した HostCommand / GuestCommand 統合テスト
 アーキテクチャ概要:
   各ユーザーは自分専用の LiveKit ルーム（名前 = ユーザーハッシュ）を持つ。
   ルーム内には Python ボット（identity="python-bot"）が常駐し、
-  ユーザーからの GuestCommand を受け取り HostCommand を全ユーザーにブロードキャストする。
+  ユーザーからの GuestCommand を受け取り HostCommand をブロードキャストする。
+  HostCommand は過去形（JOINED/MOVED/UPDATED/LEFT/MUTED）で GuestCommand と区別する。
+  JOIN/UPDATE/MUTE は送信者を除いた全員に配信する。
 
   ┌─────────────────────────────────────────────────────────┐
   │  TestParticipant("ha")          TestParticipant("hb")   │
   │      room "ha"                      room "hb"           │
   │  ┌──────────────┐              ┌──────────────┐         │
   │  │ bot "python" │              │ bot "python" │         │
-  │  │ ← GuestCmd   │ send_all()→  │ HostCmd →    │         │
+  │  │ ← GuestCmd   │ send_others()→│ HostCmd →    │         │
   │  └──────────────┘              └──────────────┘         │
   └─────────────────────────────────────────────────────────┘
 
 実行条件:
   docker compose up で LiveKit サーバーを起動し、DOMAIN 環境変数を設定すること。
-  未設定の場合は全テストがスキップされます。
+  未設定の場合はテストはエラー終了します（dotenv で .env から読み込みます）。
 
   uv run pytest tests/test_host_guest_commands.py -v -m livekit
 """
@@ -32,10 +34,9 @@ from api.adapter import GuestCommand, HostCommand
 from api.config import APP_NAME, DOMAIN
 from api.rtc import active_sessions, create_token, init_room
 from api import mapper as mapper_module
-from api.mapper import connections_to_islands
 from api.rtc import connects
-from api.adapter import send_message_all
 from api.user import User, UserStore
+from api.api import _position_ticker
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -220,9 +221,9 @@ async def test_lk_join_broadcast_when_new_user_connects(livekit_domain, mock_map
     pb = _TestParticipant(HB)
     await pb.connect()
 
-    msg = await pa.wait_for_command("JOIN")
+    msg = await pa.wait_for_command("JOINED")
 
-    assert msg["command"] == "JOIN"
+    assert msg["command"] == "JOINED"
     assert msg["user"]["h"] == HB
     assert msg["user"]["name"] == "User B"
 
@@ -241,7 +242,7 @@ async def test_lk_join_broadcast_when_new_user_connects(livekit_domain, mock_map
 
 @pytest.mark.livekit
 async def test_lk_update_broadcasts_to_all_users(two_participants):
-    """GuestCommand.UPDATE を送ると全ユーザーに HostCommand.UPDATE がブロードキャストされる"""
+    """GuestCommand.UPDATE を送ると送信者以外のユーザーに HostCommand.UPDATED がブロードキャストされる"""
     pa, pb = two_participants
 
     await pa.send(
@@ -259,14 +260,10 @@ async def test_lk_update_broadcasts_to_all_users(two_participants):
         }
     )
 
-    # 送信者自身にも届く
-    msg_a = await pa.wait_for_command("UPDATE")
-    # 他ユーザーにも届く
-    msg_b = await pb.wait_for_command("UPDATE")
+    # 送信者以外（HB）に届く（送信者自身には送信されない）
+    msg_b = await pb.wait_for_command("UPDATED")
 
-    assert msg_a["user"]["name"] == "Updated Name"
     assert msg_b["user"]["name"] == "Updated Name"
-    assert msg_a["user"]["h"] == HA
     assert msg_b["user"]["h"] == HA
 
 
@@ -277,7 +274,7 @@ async def test_lk_update_broadcasts_to_all_users(two_participants):
 
 @pytest.mark.livekit
 async def test_lk_mute_true_broadcasts_update_to_all(two_participants):
-    """GuestCommand.MUTE (mute=True) を送ると全ユーザーに HostCommand.UPDATE が届く"""
+    """GuestCommand.MUTE (mute=True) を送ると送信者以外のユーザーに HostCommand.MUTED が届く"""
     pa, pb = two_participants
 
     await pa.send(
@@ -287,33 +284,30 @@ async def test_lk_mute_true_broadcasts_update_to_all(two_participants):
         }
     )
 
-    msg_a = await pa.wait_for_command("UPDATE")
-    msg_b = await pb.wait_for_command("UPDATE")
+    # 送信者以外（HB）に届く（送信者自身には送信されない）
+    msg_b = await pb.wait_for_command("MUTED")
 
-    assert msg_a["mute"] is True
-    assert msg_a["h"] == HA
     assert msg_b["mute"] is True
     assert msg_b["h"] == HA
 
 
 @pytest.mark.livekit
 async def test_lk_mute_false_broadcasts_update_to_all(two_participants):
-    """GuestCommand.MUTE (mute=False) を送ると全ユーザーに HostCommand.UPDATE が届く"""
+    """GuestCommand.MUTE (mute=False) を送ると送信者以外のユーザーに HostCommand.MUTED が届く"""
     pa, pb = two_participants
 
-    # まずミュートにする
+    # まずミュートにする（送信者自身には MUTED が届かないため HB 側で消費）
     await pa.send({"command": GuestCommand.MUTE, "mute": True})
-    await pa.wait_for_command("UPDATE")
-    await pb.wait_for_command("UPDATE")
+    await pb.wait_for_command("MUTED")
 
     # ミュート解除
     await pa.send({"command": GuestCommand.MUTE, "mute": False})
 
-    msg_a = await pa.wait_for_command("UPDATE")
-    msg_b = await pb.wait_for_command("UPDATE")
+    # 送信者以外（HB）に届く
+    msg_b = await pb.wait_for_command("MUTED")
 
-    assert msg_a["mute"] is False
     assert msg_b["mute"] is False
+    assert msg_b["h"] == HA
 
 
 # ---------------------------------------------------------------------------
@@ -323,43 +317,39 @@ async def test_lk_mute_false_broadcasts_update_to_all(two_participants):
 
 @pytest.mark.livekit
 async def test_lk_move_broadcasts_move_after_tick(two_participants):
-    """GuestCommand.MOVE を送り、ポジションティッカーをトリガーすると
-    全ユーザーに HostCommand.MOVE がブロードキャストされる。
-
-    ティッカー（毎秒実行）を直接トリガーして 1 秒の待機を省く。
-    """
+    """GuestCommand.MOVE を送り、バックグラウンドタスクのポジションティッカーが発火すると
+    全ユーザーに HostCommand.MOVED がブロードキャストされる。"""
     pa, pb = two_participants
 
-    target_x, target_y = 2, 2
-    await pa.send(
-        {
-            "command": GuestCommand.MOVE,
-            "x": target_x,
-            "y": target_y,
-        }
-    )
+    # バックグラウンドタスクでポジションティッカーを起動
+    ticker_task = asyncio.create_task(_position_ticker())
 
-    # ボットが on_message を処理するのを待つ
-    await asyncio.sleep(0.3)
+    try:
+        target_x, target_y = 2, 2
+        await pa.send(
+            {
+                "command": GuestCommand.MOVE,
+                "x": target_x,
+                "y": target_y,
+            }
+        )
 
-    # ポジションティッカーのロジックを手動トリガー（1 秒待機を省略）
-    m = mapper_module.mapper
-    result = m.last_updated()
-    islands = connections_to_islands(m.last_connections)
-    connects(islands)
-    if result["moves"]:
-        moves = [{"h": mv.h, "x": mv.x, "y": mv.y} for mv in result["moves"]]
-        await send_message_all(HostCommand.MOVE, {"moves": moves})
-
-    msg_a = await pa.wait_for_command("MOVE")
-    msg_b = await pb.wait_for_command("MOVE")
+        # ティッカーが 1 秒待機後に MOVED をブロードキャストするのを待つ
+        msg_a = await pa.wait_for_command("MOVED", timeout=6.0)
+        msg_b = await pb.wait_for_command("MOVED", timeout=6.0)
+    finally:
+        ticker_task.cancel()
+        try:
+            await ticker_task
+        except asyncio.CancelledError:
+            pass
 
     # HA が target_x, target_y に移動したことを確認
     ha_move_a = next((mv for mv in msg_a["moves"] if mv["h"] == HA), None)
     ha_move_b = next((mv for mv in msg_b["moves"] if mv["h"] == HA), None)
 
-    assert ha_move_a is not None, "MOVE メッセージに HA の移動が含まれていない"
-    assert ha_move_b is not None, "MOVE メッセージに HA の移動が含まれていない"
+    assert ha_move_a is not None, "MOVED メッセージに HA の移動が含まれていない"
+    assert ha_move_b is not None, "MOVED メッセージに HA の移動が含まれていない"
     assert ha_move_a["x"] == target_x
     assert ha_move_a["y"] == target_y
 
@@ -388,15 +378,15 @@ async def test_lk_leave_broadcasts_to_remaining_users(livekit_domain, mock_mappe
     await pb.connect()
     # 同上
     await pb.wait_for_command("INIT", timeout=15.0)
-    await pa.wait_for_command("JOIN")  # HB JOIN を消費
+    await pa.wait_for_command("JOINED")  # HB JOINED を消費
 
     # HB が退出
     await pb.disconnect()
 
-    # HA は LEAVE を受け取るはず
-    msg = await pa.wait_for_command("LEAVE")
+    # HA は LEFT を受け取るはず
+    msg = await pa.wait_for_command("LEFT")
 
-    assert msg["command"] == "LEAVE"
+    assert msg["command"] == "LEFT"
     assert msg["h"] == HB
 
     await pa.disconnect()
@@ -437,7 +427,8 @@ async def test_lk_update_preserves_position_from_server(two_participants):
         }
     )
 
-    msg = await pa.wait_for_command("UPDATE")
+    # UPDATED は送信者以外（HB）に届く
+    msg = await pb.wait_for_command("UPDATED")
 
     # サーバー管理の座標が維持されていること
     assert msg["user"]["x"] == server_x

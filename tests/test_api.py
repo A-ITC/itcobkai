@@ -14,6 +14,7 @@ import json
 import pytest
 from time import time
 from unittest.mock import AsyncMock, MagicMock, patch
+from httpx import AsyncClient, ASGITransport
 
 from api.auth import encode
 from api.config import APP_NAME
@@ -40,16 +41,16 @@ class TestApiToken:
         assert isinstance(body["ttl"], int)
 
     async def test_invalid_cookie_raises_error(self, client):
-        """不正な Cookie は decode 例外を送出する
-        (token エンドポイントは例外をハンドリングしないため例外が伝播する)
-        """
-        with pytest.raises(Exception):
-            await client.get("/api/token", cookies={"session": "invalid.cookie.value"})
+        """不正な Cookie は 401 を返す"""
+        resp = await client.get(
+            "/api/token", cookies={"session": "invalid.cookie.value"}
+        )
+        assert resp.status_code == 401
 
     async def test_missing_cookie_raises_error(self, client):
-        """Cookie なしは TypeError / AttributeError を送出する"""
-        with pytest.raises(Exception):
-            await client.get("/api/token")
+        """Cookie なしは 401 を返す"""
+        resp = await client.get("/api/token")
+        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +103,7 @@ class TestApiSession:
         (SessionRequest は BaseModel なので GET リクエストでも JSON body として送信)
         """
         mock_info = MagicMock()
-        mock_info.id = "discord_user_hash_abc"
+        mock_info.h = "discord_user_hash_abc"
 
         with patch("api.api.discord", new=AsyncMock(return_value=mock_info)):
             resp = await client.request(
@@ -121,19 +122,16 @@ class TestApiSession:
 
 
 class TestApiMaster:
-    async def test_non_localhost_check_raises_http_403(self):
-        """_check_localhost は非 localhost IP からのアクセスを 403 で拒否する
-        (httpx ASGITransport は 127.0.0.1 を使うため HTTP 経由ではテスト不可)
-        """
-        from fastapi import HTTPException
-        from api.api import _check_localhost
-
-        mock_request = MagicMock()
-        mock_request.client.host = "192.168.1.100"
-
-        with pytest.raises(HTTPException) as exc_info:
-            _check_localhost(mock_request)
-        assert exc_info.value.status_code == 403
+    async def test_non_localhost_check_raises_http_403(self, test_app):
+        """_check_localhost は非 localhost IP からのアクセスを 403 で拒否する"""
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app, client=("192.168.1.100", 50000)),
+            base_url="http://test",
+        ) as c:
+            resp = await c.post(
+                "/api/master", json={"command": "ALERT", "text": "test"}
+            )
+        assert resp.status_code == 403
 
     async def test_non_localhost_none_client_raises_http_403(self):
         """client が None の場合も 403"""

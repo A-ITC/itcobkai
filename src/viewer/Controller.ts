@@ -43,11 +43,18 @@ export default class Controller {
   public async newMap(mapraw: MapRaw) {
     // 新しいマップを作成
     await this.mc.newMap(mapraw, this.canvas);
+    // マップ差し替え後に Cropper を新しいマップで再初期化
+    this.cropper = new Cropper(this.mc.map, this.cropper.get().x, this.cropper.get().y);
   }
 
   public setUsers(users: { [key: string]: User }, playerId?: string) {
     this.users = users;
-    if (playerId) this.player = users[playerId];
+    if (playerId) {
+      this.player = users[playerId];
+      if (this.player) {
+        this.cropper.jump(this.player.x, this.player.y);
+      }
+    }
     this.refresh();
   }
 
@@ -57,13 +64,25 @@ export default class Controller {
     setTimeout(() => (this.inThrottle = false), 100);
     if (!this.cropper.canMove(dx, dy)) return false;
     const { x, y } = this.cropper.move(dx, dy);
-    this.player!.x = x;
-    this.player!.y = y;
+    if (this.player) {
+      this.player.x = x;
+      this.player.y = y;
+    }
     this.refresh();
   }
 
   public async refresh() {
     const { top, left } = this.cropper.get();
-    await this.mc.draw([...Object.values(this.users), this.player!], left, top);
+    const allUsers: User[] = [...Object.values(this.users)];
+    if (this.player) allUsers.push(this.player);
+    await this.mc.draw(allUsers, left, top);
+  }
+
+  // サーバが確定した位置にCropperをジャンプ（初期配置など thisPlayerがない場合のみ）
+  public jumpTo(x: number, y: number) {
+    if (!this.player) {
+      this.cropper.jump(x, y);
+      this.refresh();
+    }
   }
 }

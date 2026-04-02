@@ -98,7 +98,7 @@ class Mapper:
             self.last_moves[h] = (x, y)
 
     def get_map_meta(self) -> dict:
-        return {**self._meta, "width": self.width, "height": self.height}
+        return {**self._meta, "width": self.width, "height": self.height, "red": self.map_raw.red, "black": self.map_raw.black}
 
     def last_updated(self):
         current_connections = self._calculate_current_connections()
