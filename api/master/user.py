@@ -1,13 +1,13 @@
 from json import dump, load as json_load
 from typing import Literal
-from .config import USERS_JSON
 from pydantic import BaseModel, Field
+from ..utils.config import USERS_JSON
 
 
 class User(BaseModel):
     h: str = Field("", max_length=40)
     name: str = Field("", max_length=40)
-    year: int = Field(0, ge=0, le=20)
+    year: int = Field(-1, ge=-1, le=20)
     groups: list[Literal["dtm", "cg", "prog", "mv"]] = Field(default_factory=list)
     avatar: str = ""
     x: int = 0

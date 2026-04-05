@@ -5,8 +5,6 @@ import { loadImage, storage } from "../common/Common";
 export default class MapCreater {
   private canvas = document.createElement("canvas");
   private ctx: CanvasRenderingContext2D;
-  private bottomImage = new Image();
-  private topImage = new Image();
   public map: Map = { area: [], noentry: [], topImage: new Image(), bottomImage: new Image(), width: 0, height: 0 };
   public avatars: { [key: string]: HTMLImageElement } = {};
 
@@ -19,6 +17,7 @@ export default class MapCreater {
     // 新しいマップを作成
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
+    this.resize();
     this.map = await this.loadMap(mapraw);
   }
 
@@ -26,7 +25,7 @@ export default class MapCreater {
     // 描画
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBottom(left, top);
-    this.drawUsers(users, left, top);
+    await this.drawUsers(users, left, top);
     this.drawTop(left, top);
   }
 
@@ -112,7 +111,7 @@ export default class MapCreater {
   }
 
   private drawGrid() {
-    this.ctx.strokeStyle = "rgba(200,200,200,0.2)";
+    this.ctx.strokeStyle = "rgba(200,200,200,0.7)";
     let grid = this.canvas.width / storage.outer;
     for (var i = 0; i <= this.canvas.height / grid; ++i) {
       this.ctx.beginPath();
@@ -153,9 +152,12 @@ export default class MapCreater {
       const client = e.changedTouches[0];
       const x = client.clientX - (rect.right + rect.left) / 2;
       const y = client.clientY - (rect.bottom + rect.top) / 2;
-      if (Math.abs(x) <= y) direction = [0, 1]; // 下
-      else if (Math.abs(y) <= x) direction = [1, 0]; // 右
-      else if (Math.abs(x) <= -y) direction = [0, -1]; // 上
+      if (Math.abs(x) <= y)
+        direction = [0, 1]; // 下
+      else if (Math.abs(y) <= x)
+        direction = [1, 0]; // 右
+      else if (Math.abs(x) <= -y)
+        direction = [0, -1]; // 上
       else if (Math.abs(y) <= -x) direction = [-1, 0]; // 左
     }
 

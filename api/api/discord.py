@@ -1,16 +1,25 @@
 from httpx import AsyncClient
-from .user import User
-from .utils import id7
+from dataclasses import dataclass
+from ..master.user import User
+from ..utils.utils import id7
 from asyncio import gather
 from hashlib import sha256
 from fastapi import HTTPException
-from .config import (
+from ..utils.config import (
     AVATAR_DIR,
     DISCORD_ALLOWED_SERVERS,
     DISCORD_CLIENT_ID,
     DISCORD_CLIENT_SECRET,
 )
 from pathlib import Path
+
+
+@dataclass
+class DiscordUserInfo:
+    id: str
+    hash: str
+    name: str
+    avatar: str | None
 
 
 async def discord(code: str | None = None, redirect: str | None = None) -> User:
@@ -23,8 +32,8 @@ async def discord(code: str | None = None, redirect: str | None = None) -> User:
                 _get_avatar_data(client, access_token),
                 _check_joined(client, access_token),
             )
-            avatar = await _get_avatar_base64(client, info["id"], info["avatar"])
-            return User(h=info["hash"], name=info["name"], avatar=avatar)
+            avatar = await _get_avatar_base64(client, info.id, info.avatar)
+            return User(h=info.hash, name=info.name, avatar=avatar)
         except HTTPException:
             raise
         except Exception as err:
@@ -51,8 +60,8 @@ async def _auth_discord(client: AsyncClient, code: str, redirect: str) -> str:
     return body["access_token"]
 
 
-async def _get_avatar_data(client: AsyncClient, access_token: str) -> dict:
-    """内部処理用。dataclass生成前の生データを辞書で返す"""
+async def _get_avatar_data(client: AsyncClient, access_token: str) -> DiscordUserInfo:
+    """内部処理用。Discord APIからユーザー情報を取得して返す"""
     url = "https://discordapp.com/api/users/@me"
     headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -60,12 +69,12 @@ async def _get_avatar_data(client: AsyncClient, access_token: str) -> dict:
     body = response.json()
 
     user_id = str(body.get("id"))
-    return {
-        "id": user_id,
-        "hash": id7(user_id),
-        "name": body.get("global_name") or body.get("username"),
-        "avatar": body.get("avatar"),
-    }
+    return DiscordUserInfo(
+        id=user_id,
+        hash=id7(user_id),
+        name=body.get("global_name") or body.get("username"),
+        avatar=body.get("avatar"),
+    )
 
 
 async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:

@@ -1,6 +1,6 @@
 import { GuestCommand, MapRaw, User } from "../common/Schema";
 import { ticker } from "../common/Common";
-import MapCreater from "./MapCreater";
+import MapCreater from "./MapCreator";
 import Cropper from "./Cropper";
 
 export default class Controller {

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { User } from "../../src/common/Schema";
-import Viewer from "../../src/viewer/Viewer";
+import Viewer from "../../src/viewer/Main";
 
 // ──────────────────────────────────────────────────────────
 // モック定義

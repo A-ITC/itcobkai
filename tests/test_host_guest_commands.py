@@ -30,13 +30,12 @@ import pytest
 
 from livekit.rtc import DataPacket, Room
 
-from api.adapter import GuestCommand, HostCommand
-from api.config import APP_NAME, DOMAIN
-from api.rtc import active_sessions, create_token, init_room
-from api import mapper as mapper_module
-from api.rtc import connects
-from api.user import User, UserStore
-from api.api import _position_ticker
+from api.rtc.adapter import GuestCommand, HostCommand
+from api.utils.config import APP_NAME, DOMAIN
+from api.rtc.rtc import active_sessions, create_token, init_room
+from api.rtc.rtc import connects
+from api.master.user import User, UserStore
+from api.api.lifespan import _position_ticker
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -318,7 +317,7 @@ async def test_lk_mute_false_broadcasts_update_to_all(two_participants):
 @pytest.mark.livekit
 async def test_lk_move_broadcasts_move_after_tick(two_participants):
     """GuestCommand.MOVE を送り、バックグラウンドタスクのポジションティッカーが発火すると
-    全ユーザーに HostCommand.MOVED がブロードキャストされる。"""
+    他のユーザーに HostCommand.MOVED がブロードキャストされる（送信者自身には配信しない）。"""
     pa, pb = two_participants
 
     # バックグラウンドタスクでポジションティッカーを起動
@@ -335,7 +334,7 @@ async def test_lk_move_broadcasts_move_after_tick(two_participants):
         )
 
         # ティッカーが 1 秒待機後に MOVED をブロードキャストするのを待つ
-        msg_a = await pa.wait_for_command("MOVED", timeout=6.0)
+        # PB（他のユーザー）は HA の移動を受信する
         msg_b = await pb.wait_for_command("MOVED", timeout=6.0)
     finally:
         ticker_task.cancel()
@@ -344,14 +343,11 @@ async def test_lk_move_broadcasts_move_after_tick(two_participants):
         except asyncio.CancelledError:
             pass
 
-    # HA が target_x, target_y に移動したことを確認
-    ha_move_a = next((mv for mv in msg_a["moves"] if mv["h"] == HA), None)
+    # PB が HA の移動を受信したことを確認
     ha_move_b = next((mv for mv in msg_b["moves"] if mv["h"] == HA), None)
-
-    assert ha_move_a is not None, "MOVED メッセージに HA の移動が含まれていない"
     assert ha_move_b is not None, "MOVED メッセージに HA の移動が含まれていない"
-    assert ha_move_a["x"] == target_x
-    assert ha_move_a["y"] == target_y
+    assert ha_move_b["x"] == target_x
+    assert ha_move_b["y"] == target_y
 
 
 # ---------------------------------------------------------------------------

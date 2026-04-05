@@ -1,12 +1,7 @@
+import dataclasses
 import random
 from dataclasses import dataclass
-
-
-@dataclass
-class Move:
-    h: str
-    x: int
-    y: int
+from ..utils.schema import MapMeta, Move
 
 
 @dataclass
@@ -15,13 +10,36 @@ class MapRaw:
     black: str  # noentry
 
 
-# 型エイリアスの定義 (Python 3.12+)
 type Position = tuple[int, int]
 type Connection = tuple[str, str]
 
 
+@dataclass
+class LastUpdated:
+    moves: list[Move]
+    connects: list[Connection]
+    disconnects: list[Connection]
+
+
 class Mapper:
-    def __init__(self, map_raw: MapRaw):
+    def __init__(self):
+        self.map_raw: MapRaw | None = None
+        self.area: list[list[bool]] = []
+        self.noentry: list[list[bool]] = []
+        self.height: int = 0
+        self.width: int = 0
+        self.walkable_cells: list[Position] = []
+        self.island_ids: list[list[int]] = []
+        self.user_positions: dict[str, Position] = {}
+        self.last_connections: set[Connection] = set()
+        self.last_moves: dict[str, Position] = {}
+        self._meta: MapMeta | None = None
+
+    def __bool__(self) -> bool:
+        return self.map_raw is not None
+
+    def init(self, map_raw: MapRaw, meta: MapMeta):
+        """マップデータからマッパーを初期化する（NEWMAP 時にも呼び出し可能）"""
         self.map_raw = map_raw
 
         # グリッドのパース
@@ -34,7 +52,7 @@ class Mapper:
         self.width = len(self.area[0]) if self.height > 0 else 0
 
         # 歩行可能エリアの事前計算
-        self.walkable_cells: list[Position] = []
+        self.walkable_cells = []
         for y in range(self.height):
             for x in range(self.width):
                 if not self.noentry[y][x]:
@@ -44,11 +62,21 @@ class Mapper:
         self.island_ids = [[0 for _ in range(self.width)] for _ in range(self.height)]
         self._label_islands()
 
-        # 状態管理
-        self.user_positions: dict[str, Position] = {}
-        self.last_connections: set[Connection] = set()
-        self.last_moves: dict[str, Position] = {}
-        self._meta: dict = {}
+        # 状態管理のリセット
+        self.user_positions = {}
+        self.last_connections = set()
+        self.last_moves = {}
+        self._meta = dataclasses.replace(
+            meta,
+            width=self.width,
+            height=self.height,
+            red=map_raw.red,
+            black=map_raw.black,
+        )
+
+    def reset(self):
+        """マッパーを未初期化状態に戻す"""
+        self.__init__()
 
     def _label_islands(self):
         island_count = 0
@@ -77,6 +105,7 @@ class Mapper:
                                 stack.append((nx, ny))
 
     def get_raw(self) -> MapRaw:
+        assert self.map_raw is not None, "Mapper is not initialized"
         return self.map_raw
 
     def new_user(self, h: str) -> Move:
@@ -97,10 +126,11 @@ class Mapper:
             self.user_positions[h] = (x, y)
             self.last_moves[h] = (x, y)
 
-    def get_map_meta(self) -> dict:
-        return {**self._meta, "width": self.width, "height": self.height, "red": self.map_raw.red, "black": self.map_raw.black}
+    def get_map_meta(self) -> MapMeta:
+        assert self._meta is not None, "MapMeta is not initialized"
+        return self._meta
 
-    def last_updated(self):
+    def last_updated(self) -> LastUpdated:
         current_connections = self._calculate_current_connections()
 
         connects = list(current_connections - self.last_connections)
@@ -110,7 +140,7 @@ class Mapper:
         moves = [Move(h=h, x=pos[0], y=pos[1]) for h, pos in self.last_moves.items()]
         self.last_moves.clear()
 
-        return {"moves": moves, "connects": connects, "disconnects": disconnects}
+        return LastUpdated(moves=moves, connects=connects, disconnects=disconnects)
 
     def _calculate_current_connections(self) -> set[Connection]:
         user_list = list(self.user_positions.items())
@@ -166,16 +196,7 @@ class Mapper:
         return connections
 
 
-# マッパーのグローバルインスタンス（init_mapper で初期化）
-mapper: Mapper | None = None
-
-
-def init_mapper(map_raw: MapRaw, meta: dict):
-    """マップデータからマッパーを初期化する（NEWMAP 時にも呼び出し可能）"""
-    global mapper
-    m = Mapper(map_raw)
-    m._meta = meta
-    mapper = m
+mapper = Mapper()
 
 
 def connections_to_islands(connections: "set[Connection]") -> list[list[str]]:

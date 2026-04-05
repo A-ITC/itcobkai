@@ -1,7 +1,7 @@
 /* @refresh reload */
 import { HashRouter, Route } from "@solidjs/router";
 import { render } from "solid-js/web";
-import Viewer from "./viewer/Viewer";
+import Main from "./viewer/Main";
 import Login from "./Login";
 import "./index.css";
 
@@ -14,7 +14,7 @@ function Router() {
     <HashRouter>
       <Route
         path="/"
-        component={Viewer}
+        component={Main}
       />
       <Route
         path="/login"

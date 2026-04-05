@@ -3,13 +3,13 @@ from time import time
 from dotenv import load_dotenv
 from typing import TypedDict
 from base64 import b64decode, b64encode
-from .config import SECRET_KEY, TTL
 from hashlib import sha256
 from fastapi import Depends, Header, APIRouter, HTTPException
 from asyncio import iscoroutine
 from inspect import signature
 from functools import wraps
 from urllib.parse import quote, unquote
+from ..utils.config import SECRET_KEY, TTL
 
 
 class Session(TypedDict):

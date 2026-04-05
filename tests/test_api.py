@@ -4,7 +4,7 @@ FastAPI エンドポイントテスト
 対象エンドポイント:
   GET  /api/token   — セッション Cookie を検証して JWT を返す
   POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)
-  GET  /api/session — Discord OAuth2 コールバック
+  POST /api/discord — Discord OAuth2 コールバック
   POST /api/master  — 管理コマンド (localhost 限定)
   GET  /dist/assets/{filename}
   GET  /dist/images/{hash}
@@ -16,10 +16,10 @@ from time import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient, ASGITransport
 
-from api.auth import encode
-from api.config import APP_NAME
-from api.rtc import active_sessions
-from api.user import UserStore
+from api.api.auth import encode
+from api.utils.config import APP_NAME
+from api.rtc.rtc import active_sessions
+from api.master.user import UserStore
 from tests.conftest import make_test_user
 
 
@@ -84,7 +84,7 @@ class TestApiInit:
         assert "token" in body
 
         # クリーンアップ
-        from api.rtc import active_sessions as sess
+        from api.rtc.rtc import active_sessions as sess
 
         h = "testhash123"
         session = sess.pop(h, None)
@@ -99,16 +99,12 @@ class TestApiInit:
 
 class TestApiSession:
     async def test_discord_oauth_sets_session_cookie(self, client):
-        """Discord OAuth が成功するとセッション Cookie がセットされる
-        (SessionRequest は BaseModel なので GET リクエストでも JSON body として送信)
-        """
-        mock_info = MagicMock()
-        mock_info.h = "discord_user_hash_abc"
+        """Discord OAuth が成功するとセッション Cookie がセットされる"""
+        mock_user = make_test_user("discord_user_hash_abc", "Test User")
 
-        with patch("api.api.discord", new=AsyncMock(return_value=mock_info)):
-            resp = await client.request(
-                "GET",
-                "/api/session",
+        with patch("api.api.router.discord", new=AsyncMock(return_value=mock_user)):
+            resp = await client.post(
+                "/api/discord",
                 json={"code": "dummycode", "redirect": "https://example.com/callback"},
             )
 
@@ -136,7 +132,7 @@ class TestApiMaster:
     async def test_non_localhost_none_client_raises_http_403(self):
         """client が None の場合も 403"""
         from fastapi import HTTPException
-        from api.api import _check_localhost
+        from api.api.router import _check_localhost
 
         mock_request = MagicMock()
         mock_request.client = None
@@ -147,7 +143,7 @@ class TestApiMaster:
 
     async def test_alert_command(self, local_client):
         """ALERT コマンドは send_message_all を呼んで 200 を返す"""
-        with patch("api.rtc.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             resp = await local_client.post(
                 "/api/master", json={"command": "ALERT", "text": "メンテナンス中"}
             )
@@ -156,7 +152,7 @@ class TestApiMaster:
 
     async def test_alert_with_reload_flag(self, local_client):
         """ALERT + reload フラグは 200 を返す"""
-        with patch("api.rtc.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             resp = await local_client.post(
                 "/api/master",
                 json={"command": "ALERT", "text": "再起動", "reload": True},
@@ -165,7 +161,7 @@ class TestApiMaster:
 
     async def test_newmap_existing_map(self, local_client, mock_mapper):
         """NEWMAP コマンドは存在するマップ名で 200 を返す"""
-        with patch("api.rtc.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             resp = await local_client.post(
                 "/api/master", json={"command": "NEWMAP", "map": "map2"}
             )
@@ -182,7 +178,7 @@ class TestApiMaster:
     async def test_leave_removes_participant(self, local_client):
         """LEAVE コマンドは LiveKit API を通じてユーザーを削除して 200 を返す"""
         mock_remove = AsyncMock()
-        with patch("api.api.lkapi") as mock_lkapi:
+        with patch("api.api.master.lkapi") as mock_lkapi:
             mock_lkapi.room.remove_participant = mock_remove
             resp = await local_client.post(
                 "/api/master", json={"command": "LEAVE", "h": "target_user_hash"}
@@ -193,7 +189,7 @@ class TestApiMaster:
 
     async def test_leave_livekit_error_returns_400(self, local_client):
         """LEAVE コマンドで LiveKit エラーが起きると 400 を返す"""
-        with patch("api.api.lkapi") as mock_lkapi:
+        with patch("api.api.master.lkapi") as mock_lkapi:
             mock_lkapi.room.remove_participant = AsyncMock(
                 side_effect=Exception("Not found")
             )

@@ -21,13 +21,13 @@ from time import time
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
-import api.master  # noqa: F401 — @on_message/@on_join/@on_leave ハンドラーを登録
-from api.api import router, _check_localhost
-from api.auth import encode
-from api.rtc import active_sessions, lkapi, muted_users
-from api.user import User, UserStore
-from api import mapper as mapper_module
-from api.mapper import MapRaw, init_mapper
+import api.master.master  # noqa: F401 — @on_message/@on_join/@on_leave ハンドラーを登録
+from api.api.router import router, _check_localhost
+from api.api.auth import encode
+from api.rtc.rtc import active_sessions, lkapi, muted_users
+from api.master.user import User, UserStore
+from api.master.mapper import MapRaw, mapper
+from api.utils.schema import MapMeta
 
 
 # ---------------------------------------------------------------------------
@@ -41,12 +41,12 @@ def reset_state():
     UserStore._users.clear()
     active_sessions.clear()
     muted_users.clear()
-    mapper_module.mapper = None
+    mapper.reset()
     yield
     UserStore._users.clear()
     active_sessions.clear()
     muted_users.clear()
-    mapper_module.mapper = None
+    mapper.reset()
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +83,7 @@ async def client(test_app):
 @pytest.fixture
 async def local_client(test_app, monkeypatch):
     """localhost 認証をバイパスした master エンドポイント用クライアント"""
-    monkeypatch.setattr("api.api._check_localhost", lambda request: None)
+    monkeypatch.setattr("api.api.router._check_localhost", lambda request: None)
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as c:
@@ -118,11 +118,11 @@ def mock_mapper():
     """5x5 の単純グリッドでマッパーを初期化する（テスト用）"""
     red = "11111,11111,11111,11111,11111"  # 全セル island 対象
     black = "00000,00000,00000,00000,00000"  # 衝突なし
-    init_mapper(
+    mapper.init(
         MapRaw(red=red, black=black),
-        {"name": "test_map", "top": "", "bottom": ""},
+        MapMeta(name="test_map", top="", bottom=""),
     )
-    return mapper_module.mapper
+    return mapper
 
 
 # ---------------------------------------------------------------------------

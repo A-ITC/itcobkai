@@ -7,8 +7,8 @@ interface Storage {
 }
 
 const defaultStorage: Storage = {
-  outer: 13,
-  inner: 2
+  outer: 15,
+  inner: 5
 };
 
 export const storage = new Proxy(JSON.parse(localStorage.getItem(APP_NAME) ?? JSON.stringify(defaultStorage)), {

@@ -3,7 +3,7 @@ import numpy as np
 
 from asyncio import Queue, create_task, get_event_loop, sleep
 from dataclasses import dataclass, field
-from typing import Final
+from typing import Any, Final
 from livekit.rtc import (
     AudioFrame,
     AudioStream,
@@ -21,12 +21,10 @@ from livekit.api import (
     AccessToken,
     VideoGrants,
     ListRoomsRequest,
-    ListParticipantsRequest,
-    RoomParticipantIdentity,
     CreateRoomRequest,
     DeleteRoomRequest,
 )
-from .config import APP_NAME, DOMAIN, SECRET_KEY
+from ..utils.config import APP_NAME, DOMAIN, SECRET_KEY
 
 SAMPLE_RATE: Final = 48000
 NUM_CHANNELS: Final = 1
@@ -117,11 +115,14 @@ async def send_raw_message(user: str, message: dict):
         )
 
 
-handler = {
-    "on_message": lambda user, message: None,
-    "on_join": lambda user: None,
-    "on_leave": lambda user: None,
-}
+@dataclass
+class Handler:
+    on_message: Any = field(default_factory=lambda: lambda user, message: None)
+    on_join: Any = field(default_factory=lambda: lambda user: None)
+    on_leave: Any = field(default_factory=lambda: lambda user: None)
+
+
+handler = Handler()
 
 
 async def _process_user_audio(session: UserSession, track: Track):
@@ -156,18 +157,18 @@ async def _setup_bot_in_room(room_name: str, username: str):
             try:
                 msg = json.loads(data.data.decode())
                 print(data.participant.identity, msg)
-                create_task(handler["on_message"](data.participant.identity, msg))
+                create_task(handler.on_message(data.participant.identity, msg))
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
     @room.on("participant_connected")
     def on_participant_connected(participant: RemoteParticipant):
-        create_task(handler["on_join"](participant.identity))
+        create_task(handler.on_join(participant.identity))
 
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: RemoteParticipant):
         active_sessions.pop(participant.identity, None)
-        create_task(handler["on_leave"](participant.identity))
+        create_task(handler.on_leave(participant.identity))
 
     bot_token = create_token("python-bot", room_name)
     await room.connect(f"wss://{DOMAIN}", bot_token)

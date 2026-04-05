@@ -4,8 +4,7 @@ import gzip
 import zlib
 from os import environ, makedirs
 from sys import argv
-from json import dump, dumps, loads
-from boto3 import client
+from json import dump, loads
 from dotenv import load_dotenv
 from struct import unpack
 from base64 import b64decode
@@ -307,22 +306,15 @@ if __name__ == "__main__":
         raise ValueError(msg)
 
     load_dotenv()
-    s3_bucket = environ.get("VITE_S3_BUCKET")
     data_json = environ.get("DATA_JSON")
 
-    s3 = client("s3")
     makedirs("data/map", exist_ok=True)
     json_path = Path(f"data/{data_json}")
-
-    try:
-        response = s3.get_object(Bucket=s3_bucket, Key=data_json)
-        data = loads(response["Body"].read().decode("utf-8"))
-    except (s3.exceptions.NoSuchKey, s3.exceptions.ClientError):
-        if json_path.exists():
-            with json_path.open("r", encoding="utf-8") as f:
-                data = loads(f.read())
-        else:
-            data = {"maps": {}, "users": {}}
+    if json_path.exists():
+        with json_path.open("r", encoding="utf-8") as f:
+            data = loads(f.read())
+    else:
+        data = {"maps": {}, "users": {}}
 
     tmx = Tiled(tmx_file)
     result = {"red": "", "black": ""}
@@ -346,22 +338,9 @@ if __name__ == "__main__":
         result[key] = h
         if not (png := Path(f"data/map/{h}.png")).exists():
             _, buf = cv2.imencode(".png", img)
-            s3.put_object(
-                Bucket=s3_bucket,
-                Key=png.as_posix(),
-                Body=buf.tobytes(),
-                ContentType="image/png",
-            )
             with png.open("wb") as f:
                 f.write(buf.tobytes())
 
     data["maps"][Path(tmx_file).stem] = result
     with json_path.open("w", encoding="utf-8") as f:
         dump(data, f, indent=2, ensure_ascii=False)
-
-    s3.put_object(
-        Bucket=s3_bucket,
-        Key=data_json,
-        Body=dumps(data, ensure_ascii=False),
-        ContentType="application/json",
-    )
