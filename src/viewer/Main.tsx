@@ -1,11 +1,14 @@
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createSignal, onMount } from "solid-js";
+import { VoicePanel } from "./VoicePanel";
+import { User } from "../common/Schema";
 import request from "../common/Common";
 import Manager from "./ViewerManager";
-import { User } from "../common/Schema";
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
   const [connected, setConnected] = createSignal(false);
+  const [playerId, setPlayerId] = createSignal<string>("");
+  const [area, setArea] = createSignal<boolean[][]>([]);
   const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
@@ -21,6 +24,7 @@ export default function Main() {
       return;
     }
     manager.init(res.h);
+    setPlayerId(res.h);
     await manager.start(canvasRef!, audioRef!, res.token);
     setConnected(true);
     canvasRef?.focus();
@@ -38,6 +42,8 @@ export default function Main() {
   manager.onUpdate = users => {
     setUsers({ ...users });
   };
+
+  manager.onUpdateMap = a => setArea(a);
 
   manager.onDisconnect = () => {
     setConnected(false);
@@ -74,6 +80,8 @@ export default function Main() {
           leaveButton={leaveButton}
           muteButton={muteButton}
           users={users()}
+          playerId={playerId()}
+          area={area()}
         />
       </div>
     </div>
@@ -89,90 +97,6 @@ function HeaderBar() {
         <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">OB会</span>
       </div>
       <div class="text-sm text-gray-400 font-medium">Map View</div>
-    </div>
-  );
-}
-
-// UserItem: ユーザーリストの各行
-function UserItem(props: { user: User }) {
-  return (
-    <div class="flex items-center gap-3 py-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
-      <div class="relative flex-shrink-0">
-        <img
-          src={`/dist/images/${props.user.avatar}`}
-          alt="avatar"
-          class="w-10 h-10 rounded-full border-2 border-gray-600 object-cover"
-        />
-        <span
-          class={`absolute right-0 bottom-0 ring-2 ring-gray-800 w-3 h-3 rounded-full ${
-            props.user.mute ? "bg-red-500" : "bg-green-500"
-          }`}
-        ></span>
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="text-sm font-semibold truncate text-gray-100">{props.user.name}</div>
-        <div class="text-[10px] text-gray-500 truncate">{props.user.groups?.join(" / ") || "No Group"}</div>
-      </div>
-    </div>
-  );
-}
-
-interface VoicePanelProps {
-  connected: boolean;
-  connectButton?: () => void;
-  leaveButton?: () => void;
-  muteButton?: () => void;
-  users: { [key: string]: User };
-}
-
-function VoicePanel(props: VoicePanelProps) {
-  return (
-    <div class="w-64 md:w-72 bg-gray-800/50 p-5 border-l border-gray-700 flex flex-col shrink-0">
-      {/* 操作ボタン */}
-      <div class="flex gap-2 mb-5">
-        <Show
-          when={props.connected}
-          fallback={
-            <button
-              class="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded-lg text-sm font-bold transition-colors shadow-lg shadow-blue-900/20"
-              onClick={props.connectButton}
-            >
-              接続する
-            </button>
-          }
-        >
-          <button
-            class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm font-medium transition-colors"
-            onClick={props.leaveButton}
-          >
-            退席
-          </button>
-          <button
-            class="px-4 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg text-sm transition-colors"
-            onClick={props.muteButton}
-          >
-            消音
-          </button>
-        </Show>
-      </div>
-
-      {/* ステータス表示 */}
-      <div class="flex items-center justify-between mb-4 px-1">
-        <div class="flex items-center gap-2">
-          <div class={`w-2 h-2 rounded-full ${props.connected ? "bg-green-500 animate-pulse" : "bg-gray-500"}`}></div>
-          <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">
-            {props.connected ? "Online" : "Offline"}
-          </span>
-        </div>
-        <div class="text-xs text-gray-500 font-mono">{Object.keys(props.users).length} users</div>
-      </div>
-
-      {/* スクロール可能なユーザーリスト */}
-      <div class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
-        <div class="space-y-1">
-          <For each={Object.values(props.users)}>{user => <UserItem user={user} />}</For>
-        </div>
-      </div>
     </div>
   );
 }

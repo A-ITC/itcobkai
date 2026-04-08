@@ -1,10 +1,9 @@
 from json import load
-from ..rtc.rtc import lkapi, active_sessions
-from ..master.user import us
 from logging import getLogger
-from ..utils.config import APP_NAME
-from ..master.mapper import MapRaw, mapper
-from ..utils.schema import MapMeta, Move
+from pydantic import BaseModel
+from ..rtc.rtc import lkapi, active_sessions, init_room
+from livekit.api import RoomParticipantIdentity
+from ..master.user import us
 from ..rtc.adapter import (
     AlertCommand,
     HostCommand,
@@ -13,13 +12,12 @@ from ..rtc.adapter import (
     send_message,
     send_message_all,
 )
-from pydantic import BaseModel
-from livekit.api import RoomParticipantIdentity
+from ..utils.config import APP_NAME, MAPS_JSON
+from ..utils.schema import MapMeta, Move
+from ..master.mapper import MapRaw, mapper
 from fastapi.responses import JSONResponse
 
 logger = getLogger(__name__)
-
-_DATA_JSON = "data/itcobkai.json"
 
 
 class MasterRequest(BaseModel):
@@ -39,7 +37,7 @@ async def master_request(post: MasterRequest):
         return {"ok": True}
 
     if post.command == "NEWMAP" and post.map:
-        with open(_DATA_JSON) as f:
+        with open(MAPS_JSON) as f:
             data = load(f)
         map_data = data.get("maps", {}).get(post.map)
         if not map_data:
@@ -84,5 +82,16 @@ async def master_request(post: MasterRequest):
             user = us.get(session_h)
             users.append({"h": session_h, "name": user.name if user else ""})
         return {"users": users}
+
+    if post.command == "BOTINIT" and post.h:
+        h = post.h
+        old = active_sessions.pop(h, None)
+        if old:
+            try:
+                await old.room.disconnect()
+            except Exception:
+                pass
+        await init_room(h)
+        return {"ok": True}
 
     return JSONResponse(content={"error": "Unknown command"}, status_code=400)

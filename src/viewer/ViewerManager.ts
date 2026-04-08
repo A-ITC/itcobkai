@@ -9,6 +9,7 @@ export default class Manager {
   private users: { [key: string]: User } = {};
   private playerId: string = "";
   public onUpdate = (_users: { [key: string]: User }) => {};
+  public onUpdateMap = (_area: boolean[][]) => {};
   public onDisconnect = () => {};
 
   public onKeyDown(e: KeyboardEvent) {
@@ -76,12 +77,15 @@ export default class Manager {
           this.users = usersMap;
           await this.mc.newMap(data.map);
           this.mc.setUsers(this.users, this.playerId);
+          this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
           break;
         }
-        case HostCommand.NEWMAP:
+        case HostCommand.NEWMAP: {
           await this.mc.newMap(data.map);
           this.mc.setUsers(this.users, this.playerId);
+          this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
           break;
+        }
       }
       this.onUpdate(this.users);
     };

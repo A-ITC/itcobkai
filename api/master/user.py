@@ -32,6 +32,10 @@ class UserStore:
             user.x = x
             user.y = y
 
+    def all(self) -> list["User"]:
+        """登録済みユーザーを全件返す"""
+        return list(self._users.values())
+
     def load(self):
         """data/users.json からユーザーデータを読み込む"""
         try:

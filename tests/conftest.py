@@ -36,6 +36,14 @@ from api.utils.schema import MapMeta
 
 
 @pytest.fixture(autouse=True)
+def mock_users_json(tmp_path, monkeypatch):
+    """テスト中の upsert/load による users.json への書き込み・読み込みをテンポラリファイルにリダイレクトする"""
+    import api.master.user as user_module
+
+    monkeypatch.setattr(user_module, "USERS_JSON", str(tmp_path / "users.json"))
+
+
+@pytest.fixture(autouse=True)
 def reset_state():
     """テスト間で共有グローバルステートをリセットする"""
     UserStore._users.clear()

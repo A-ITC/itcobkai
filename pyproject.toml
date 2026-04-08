@@ -26,13 +26,20 @@ test = [
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-markers = [
-    "livekit: LiveKit サーバーへの実接続が必要なテスト (DOMAIN 環境変数が必要)",
-]
+markers = ["livekit: LiveKit サーバーへの実接続が必要なテスト (DOMAIN 環境変数が必要)"]
 
 [tool.ruff]
 ignore = []
-exclude = ["data/", "data/*", "node_modules/", ".git/", "dist/", "build/", "__pycache__/", ".venv/"]
+exclude = [
+    "data/",
+    "data/*",
+    "node_modules/",
+    ".git/",
+    "dist/",
+    "build/",
+    "__pycache__/",
+    ".venv/",
+]
 select = []
 fixable = ["ALL"]
 # [tool.ruff.per-file-ignores]

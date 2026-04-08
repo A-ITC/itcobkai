@@ -1,7 +1,11 @@
-import dataclasses
-import random
-from dataclasses import dataclass
+from json import load
+from random import choice
+from logging import getLogger
+from dataclasses import dataclass, replace
 from ..utils.schema import MapMeta, Move
+from api.utils.config import MAPS_JSON
+
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -35,6 +39,20 @@ class Mapper:
         self.last_moves: dict[str, Position] = {}
         self._meta: MapMeta | None = None
 
+    def load_map(self, map_raw: MapRaw, meta: MapMeta):
+        with open(MAPS_JSON) as f:
+            data = load(f)
+        maps = data.get("maps", {})
+        if maps:
+            map_name, map_data = next(iter(maps.items()))
+            meta = MapMeta(
+                name=map_name,
+                top=map_data.get("top", ""),
+                bottom=map_data.get("bottom", ""),
+            )
+            self.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
+            logger.info(f"map initialized: {map_name}")
+
     def __bool__(self) -> bool:
         return self.map_raw is not None
 
@@ -66,7 +84,7 @@ class Mapper:
         self.user_positions = {}
         self.last_connections = set()
         self.last_moves = {}
-        self._meta = dataclasses.replace(
+        self._meta = replace(
             meta,
             width=self.width,
             height=self.height,
@@ -112,7 +130,7 @@ class Mapper:
         if not self.walkable_cells:
             raise ValueError("配置可能なエリアがありません。")
 
-        x, y = random.choice(self.walkable_cells)
+        x, y = choice(self.walkable_cells)
         self.user_positions[h] = (x, y)
         self.last_moves[h] = (x, y)
         return Move(h=h, x=x, y=y)

@@ -12,6 +12,8 @@ export default class Controller {
   private previousPosition = { x: 0, y: 0 };
   private users: { [key: string]: User } = {};
   private player: User | undefined;
+  private drawing = false;
+  private drawQueued = false;
 
   public onKeyDown(e: KeyboardEvent) {
     if (e.key === "a" || e.key === "ArrowLeft") this.move(-1, 0);
@@ -72,10 +74,19 @@ export default class Controller {
   }
 
   public async refresh() {
-    const { top, left } = this.cropper.get();
-    const allUsers: User[] = [...Object.values(this.users)];
-    if (this.player) allUsers.push(this.player);
-    await this.mc.draw(allUsers, left, top);
+    if (this.drawing) {
+      this.drawQueued = true;
+      return;
+    }
+    this.drawing = true;
+    do {
+      this.drawQueued = false;
+      const { top, left } = this.cropper.get();
+      const allUsers: User[] = [...Object.values(this.users)];
+      if (this.player) allUsers.push(this.player);
+      await this.mc.draw(allUsers, left, top);
+    } while (this.drawQueued);
+    this.drawing = false;
   }
 
   // サーバが確定した位置にCropperをジャンプ（初期配置など thisPlayerがない場合のみ）

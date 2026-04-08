@@ -49,15 +49,13 @@ export default class MapCreater {
   }
 
   private async drawUsers(users: User[], left: number, top: number) {
-    const tasks: Promise<void>[] = [];
     for (const user of users) {
       const i = user.x - left;
       const j = user.y - top;
       if (i < 0 || storage.outer <= i) continue;
       if (j < 0 || storage.outer <= j) continue;
-      tasks.push(this.drawUser(user, i, j));
+      await this.drawUser(user, i, j);
     }
-    await Promise.all(tasks);
   }
 
   private async drawUser(user: User, i: number, j: number) {

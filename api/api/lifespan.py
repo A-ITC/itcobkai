@@ -1,21 +1,17 @@
-from json import load as json_load
-from ..rtc.rtc import mixing_loop, lkapi, connects, active_sessions
+from json import load
 from logging import getLogger
 from asyncio import create_task, sleep, gather
-from ..master.mapper import MapRaw, mapper, connections_to_islands
-from ..utils.schema import MapMeta
-from ..rtc.adapter import (
-    HostCommand,
-    MovedCommand,
-    send_message,
-)
 from fastapi import FastAPI
-from ..master.user import us
+from ..rtc.rtc import mixing_loop, lkapi, connects, active_sessions
 from contextlib import asynccontextmanager
+from ..master.user import us
+from ..rtc.adapter import HostCommand, MovedCommand, send_message
+from ..utils.schema import MapMeta
+from ..utils.logger import init_logger
+from ..master.mapper import MapRaw, mapper, connections_to_islands
+from api.utils.config import MAPS_JSON
 
 logger = getLogger(__name__)
-
-_DATA_JSON = "data/itcobkai.json"
 
 
 async def _position_ticker():
@@ -39,10 +35,11 @@ async def _position_ticker():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_logger("app")
     logger.info("start lifespan")
     us.load()
-    with open(_DATA_JSON) as f:
-        data = json_load(f)
+    with open(MAPS_JSON) as f:
+        data = load(f)
     maps = data.get("maps", {})
     if maps:
         map_name, map_data = next(iter(maps.items()))

@@ -12,6 +12,7 @@ LOG_DIR = "data/log"
 AVATAR_DIR = "data/avatars"
 MAP_DIR = "data/maps"
 USERS_JSON = "data/users.json"
+MAPS_JSON = "data/maps.json"
 
 # Discord OAuth2関連
 DISCORD_CLIENT_ID = environ.get("VITE_DISCORD_CLIENT_ID")
