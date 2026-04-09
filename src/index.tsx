@@ -3,6 +3,7 @@ import { HashRouter, Route } from "@solidjs/router";
 import { render } from "solid-js/web";
 import Main from "./viewer/Main";
 import Login from "./Login";
+import Setup from "./Setup";
 import "./index.css";
 
 window.onload = () => {
@@ -19,6 +20,10 @@ function Router() {
       <Route
         path="/login"
         component={Login}
+      />
+      <Route
+        path="/setup"
+        component={Setup}
       />
       <Route
         path="*"

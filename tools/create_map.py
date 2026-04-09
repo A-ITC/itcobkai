@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import gzip
 import zlib
-from os import environ, makedirs
+from os import makedirs
 from sys import argv
 from json import dump, loads
 from dotenv import load_dotenv
@@ -298,6 +298,33 @@ class Renderer:
             canvas[y : y + h, x : x + w, 3] = 255
 
 
+def compress_bitmap(data_str: str):
+    if not data_str:
+        return ""
+
+    rows = data_str.split(",")
+    height = len(rows)
+    width = len(rows[0])
+
+    new_rows = []
+    # 2行ずつスキップ。奇数行で終わる場合は最後の行を無視（または調整）
+    for y in range(0, height // 2 * 2, 2):
+        new_row = ""
+        # 2列ずつスキップ
+        for x in range(0, width // 2 * 2, 2):
+            # 2x2のエリアを確認
+            p1 = rows[y][x]
+            p2 = rows[y][x + 1]
+            p3 = rows[y + 1][x]
+            p4 = rows[y + 1][x + 1]
+
+            # 1つでも '1' があれば '1'
+            new_row += "1" if "1" in (p1, p2, p3, p4) else "0"
+        new_rows.append(new_row)
+
+    return ",".join(new_rows)
+
+
 if __name__ == "__main__":
     if len(argv) > 1:
         tmx_file = argv[1]
@@ -306,7 +333,7 @@ if __name__ == "__main__":
         raise ValueError(msg)
 
     load_dotenv()
-    data_json = environ.get("DATA_JSON")
+    data_json = "maps.json"
 
     makedirs("data/map", exist_ok=True)
     json_path = Path(f"data/{data_json}")
@@ -321,9 +348,11 @@ if __name__ == "__main__":
 
     # フラグレイヤーの抽出
     if red_layer := tmx.find_layer_by_keyword("赤", "red"):
-        result["red"] = red_layer.get_binary_mask()
+        red = red_layer.get_binary_mask()
+        result["red"] = compress_bitmap(red)
     if black_layer := tmx.find_layer_by_keyword("黒", "black"):
-        result["black"] = black_layer.get_binary_mask()
+        black = black_layer.get_binary_mask()
+        result["black"] = compress_bitmap(black)
 
     # レンダリング対象のレイヤー振り分け
     layer_groups = {
@@ -344,3 +373,4 @@ if __name__ == "__main__":
     data["maps"][Path(tmx_file).stem] = result
     with json_path.open("w", encoding="utf-8") as f:
         dump(data, f, indent=2, ensure_ascii=False)
+    print(json_path)

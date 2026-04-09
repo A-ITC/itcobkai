@@ -46,7 +46,7 @@ function PleaseWait(props: PleaseWaitProps) {
     });
     const json = await res.json();
     if (res.status === 200) {
-      location.replace(`${location.origin}${location.pathname}`);
+      location.replace(`${location.origin}${location.pathname}#/setup`);
     } else if (res.status === 400 || res.status === 401) {
       window.alert(`認証に失敗しました: ${json.detail}`);
     } else {

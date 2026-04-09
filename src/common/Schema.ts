@@ -6,6 +6,7 @@ export interface User {
   avatar: string;
   x: number;
   y: number;
+  greeting?: string;
   mute?: boolean;
 }
 

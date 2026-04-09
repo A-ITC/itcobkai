@@ -33,6 +33,7 @@ export default function Main() {
   function leaveButton() {
     manager.end();
     setConnected(false);
+    location.reload();
   }
 
   function muteButton() {

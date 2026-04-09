@@ -3,7 +3,7 @@ from random import choice
 from logging import getLogger
 from dataclasses import dataclass, replace
 from ..utils.schema import MapMeta, Move
-from api.utils.config import MAPS_JSON
+from ..utils.config import MAPS_JSON
 
 logger = getLogger(__name__)
 

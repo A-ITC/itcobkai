@@ -238,3 +238,199 @@ class TestStaticFiles:
         """存在しない画像ハッシュは 404"""
         resp = await client.get("/dist/images/0000000000000000000000000000000000000000")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# /api/users/@me
+# ---------------------------------------------------------------------------
+
+
+class TestApiUsersMe:
+    # ── GET ──────────────────────────────────────────────────────────────
+
+    async def test_get_me_without_auth_returns_401(self, client):
+        """Authorization ヘッダーなしは 401"""
+        resp = await client.get("/api/users/@me")
+        assert resp.status_code == 401
+
+    async def test_get_me_returns_user(self, client, valid_auth_header):
+        """有効なトークンがあれば自分のユーザー情報を返す"""
+        UserStore._users["testhash123"] = make_test_user("testhash123", "Alice")
+        resp = await client.get("/api/users/@me", headers=valid_auth_header)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["h"] == "testhash123"
+        assert body["name"] == "Alice"
+        assert "greeting" in body
+
+    async def test_get_me_user_not_found_returns_404(self, client, valid_auth_header):
+        """UserStore に存在しないユーザーは 404"""
+        # reset_state で _users はクリア済み
+        resp = await client.get("/api/users/@me", headers=valid_auth_header)
+        assert resp.status_code == 404
+
+    # ── POST ─────────────────────────────────────────────────────────────
+
+    async def test_post_me_without_auth_returns_401(self, client):
+        """Authorization ヘッダーなしは 401"""
+        resp = await client.post(
+            "/api/users/@me",
+            json={"name": "Alice", "year": 3, "groups": ["dtm"], "greeting": "hi"},
+        )
+        assert resp.status_code == 401
+
+    async def test_post_me_updates_user(self, client, valid_auth_header):
+        """正常なリクエストでユーザー情報が更新される"""
+        UserStore._users["testhash123"] = make_test_user("testhash123", "Old Name")
+
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+            resp = await client.post(
+                "/api/users/@me",
+                headers=valid_auth_header,
+                json={
+                    "name": "New Name",
+                    "year": 5,
+                    "groups": ["cg", "prog"],
+                    "greeting": "こんにちは",
+                },
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["name"] == "New Name"
+        assert body["year"] == 5
+        assert body["groups"] == ["cg", "prog"]
+        assert body["greeting"] == "こんにちは"
+        assert body["h"] == "testhash123"
+
+    async def test_post_me_persists_to_store(self, client, valid_auth_header):
+        """POST 後に UserStore に変更が反映される"""
+        UserStore._users["testhash123"] = make_test_user("testhash123", "Old Name")
+
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+            await client.post(
+                "/api/users/@me",
+                headers=valid_auth_header,
+                json={"name": "Saved Name", "year": 2, "groups": [], "greeting": ""},
+            )
+
+        stored = UserStore._users.get("testhash123")
+        assert stored is not None
+        assert stored.name == "Saved Name"
+
+    async def test_post_me_preserves_avatar(self, client, valid_auth_header):
+        """POST でアバターが上書きされない"""
+        user = make_test_user("testhash123", "Alice")
+        user.avatar = "avatar_hash_abc"
+        UserStore._users["testhash123"] = user
+
+        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+            resp = await client.post(
+                "/api/users/@me",
+                headers=valid_auth_header,
+                json={"name": "Alice", "year": 1, "groups": [], "greeting": ""},
+            )
+
+        assert resp.json()["avatar"] == "avatar_hash_abc"
+
+    async def test_post_me_broadcasts_updated(self, client, valid_auth_header):
+        """POST 後に UPDATED が他ユーザーへブロードキャストされる"""
+        from api.rtc.rtc import active_sessions
+
+        UserStore._users["testhash123"] = make_test_user("testhash123", "Alice")
+
+        sent_messages: list[dict] = []
+
+        async def capture(h: str, msg: dict):
+            sent_messages.append((h, msg))
+
+        with patch("api.rtc.adapter.send_raw_message", new=capture):
+            await client.post(
+                "/api/users/@me",
+                headers=valid_auth_header,
+                json={
+                    "name": "Alice",
+                    "year": 1,
+                    "groups": ["dtm"],
+                    "greeting": "hello",
+                },
+            )
+
+        # active_sessions が空なので UPDATED は誰にも送られない（no-op でエラーなし）
+        assert sent_messages == []
+
+    async def test_post_me_user_not_found_returns_404(self, client, valid_auth_header):
+        """UserStore に存在しないユーザーは 404"""
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "Ghost", "year": 1, "groups": [], "greeting": ""},
+        )
+        assert resp.status_code == 404
+
+    async def test_post_me_empty_name_returns_422(self, client, valid_auth_header):
+        """空の name は Pydantic バリデーションエラー (422)"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "", "year": 1, "groups": [], "greeting": ""},
+        )
+        assert resp.status_code == 422
+
+    async def test_post_me_name_too_long_returns_422(self, client, valid_auth_header):
+        """41文字の name は 422"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "a" * 41, "year": 1, "groups": [], "greeting": ""},
+        )
+        assert resp.status_code == 422
+
+    async def test_post_me_year_zero_returns_422(self, client, valid_auth_header):
+        """year=0 は 422 (ge=1)"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "Alice", "year": 0, "groups": [], "greeting": ""},
+        )
+        assert resp.status_code == 422
+
+    async def test_post_me_year_21_returns_422(self, client, valid_auth_header):
+        """year=21 は 422 (le=20)"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "Alice", "year": 21, "groups": [], "greeting": ""},
+        )
+        assert resp.status_code == 422
+
+    async def test_post_me_invalid_group_returns_422(self, client, valid_auth_header):
+        """無効な group 値は 422"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={
+                "name": "Alice",
+                "year": 1,
+                "groups": ["invalid_group"],
+                "greeting": "",
+            },
+        )
+        assert resp.status_code == 422
+
+    async def test_post_me_greeting_too_long_returns_422(
+        self, client, valid_auth_header
+    ):
+        """401文字の greeting は 422"""
+        UserStore._users["testhash123"] = make_test_user("testhash123")
+        resp = await client.post(
+            "/api/users/@me",
+            headers=valid_auth_header,
+            json={"name": "Alice", "year": 1, "groups": [], "greeting": "g" * 401},
+        )
+        assert resp.status_code == 422

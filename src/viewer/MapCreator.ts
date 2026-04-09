@@ -109,7 +109,7 @@ export default class MapCreater {
   }
 
   private drawGrid() {
-    this.ctx.strokeStyle = "rgba(200,200,200,0.7)";
+    this.ctx.strokeStyle = "rgba(200,200,200,0.2)";
     let grid = this.canvas.width / storage.outer;
     for (var i = 0; i <= this.canvas.height / grid; ++i) {
       this.ctx.beginPath();

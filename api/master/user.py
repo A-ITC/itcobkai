@@ -8,7 +8,10 @@ class User(BaseModel):
     h: str = Field("", max_length=40)
     name: str = Field("", max_length=40)
     year: int = Field(-1, ge=-1, le=20)
-    groups: list[Literal["dtm", "cg", "prog", "mv"]] = Field(default_factory=list)
+    groups: list[Literal["dtm", "cg", "prog", "mv", "3dcg"]] = Field(
+        default_factory=list
+    )
+    greeting: str = Field("", max_length=400)
     avatar: str = ""
     x: int = 0
     y: int = 0

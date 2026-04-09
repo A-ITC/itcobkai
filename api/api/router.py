@@ -2,14 +2,16 @@ from time import time
 from .auth import auth, encode, decode
 from pathlib import Path
 from logging import getLogger
+from typing import Literal
 from fastapi import APIRouter, Depends, Request, HTTPException
 from .discord import discord
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from ..rtc.rtc import create_token, init_room
-from ..master.user import us
+from ..master.user import us, User
 from api.api.master import MasterRequest, master_request
 from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME
 from fastapi.responses import JSONResponse, FileResponse
+from ..rtc.adapter import HostCommand, UpdatedCommand, send_message_others
 
 router = APIRouter()
 
@@ -24,6 +26,48 @@ class InitRequest(BaseModel):
 async def init(h=Depends(auth)):
     await init_room(h)
     return {"token": create_token(h, h), "h": h}
+
+
+# ---------------------------------------------------------------------------
+# /api/users/@me
+# ---------------------------------------------------------------------------
+
+
+class UserUpdateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=40)
+    year: int = Field(..., ge=1, le=20)
+    groups: list[Literal["dtm", "cg", "prog", "mv", "3dcg"]]
+    greeting: str = Field("", max_length=400)
+
+
+@router.get("/api/users/@me")
+async def get_me(h=Depends(auth)):
+    user = us.get(h)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user.model_dump()
+
+
+@router.post("/api/users/@me")
+async def update_me(body: UserUpdateRequest, h=Depends(auth)):
+    current = us.get(h)
+    if current is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    updated = User(
+        h=h,
+        name=body.name,
+        year=body.year,
+        groups=body.groups,
+        greeting=body.greeting,
+        avatar=current.avatar,
+        x=current.x,
+        y=current.y,
+    )
+    us.upsert(updated)
+    await send_message_others(
+        h, HostCommand.UPDATED, UpdatedCommand(user=updated.model_dump())
+    )
+    return updated.model_dump()
 
 
 class SessionRequest(BaseModel):

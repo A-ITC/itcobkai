@@ -53,29 +53,74 @@ export function VoicePanel(props: VoicePanelProps) {
     const player = props.users[props.playerId];
     const allUsers = Object.values(props.users);
     const ids = islandIds();
+    const area = props.area;
 
     const distFrom = (u: User) => {
       if (!player) return 0;
       return Math.sqrt((u.x - player.x) ** 2 + (u.y - player.y) ** 2);
     };
 
-    const playerIslandId = (() => {
-      if (!player || !ids.length) return 0;
-      const { y, x } = player;
-      if (y < 0 || y >= ids.length || x < 0 || x >= ids[0].length) return 0;
-      return ids[y][x];
-    })();
-
-    if (playerIslandId === 0) {
+    if (!player || allUsers.length === 0) {
       return { connected: [], online: allUsers.sort((a, b) => distFrom(a) - distFrom(b)) };
+    }
+
+    // サーバ側 _calculate_current_connections と同じロジックで隣接リストを構築
+    const getIslandId = (u: User): number => {
+      if (!ids.length || u.y < 0 || u.y >= ids.length || u.x < 0 || u.x >= ids[0].length) return 0;
+      return ids[u.y][u.x];
+    };
+
+    const onArea = (u: User): boolean => {
+      if (!area.length || u.y < 0 || u.y >= area.length || u.x < 0 || u.x >= area[0].length) return false;
+      return area[u.y][u.x];
+    };
+
+    const adj = new Map<string, Set<string>>();
+    for (const u of allUsers) adj.set(u.h, new Set());
+
+    for (let i = 0; i < allUsers.length; i++) {
+      for (let j = i + 1; j < allUsers.length; j++) {
+        const u1 = allUsers[i];
+        const u2 = allUsers[j];
+        const island1 = getIslandId(u1);
+        const island2 = getIslandId(u2);
+
+        let isConnected = false;
+        if (island1 > 0 && island1 === island2) {
+          // 1. 同じ島にいる → 距離不問で接続
+          isConnected = true;
+        } else if (!onArea(u1) || !onArea(u2)) {
+          // 2. どちらかが島の外 → 1マス以内なら接続（手繋ぎは連結成分で解決）
+          if (Math.abs(u1.x - u2.x) <= 1 && Math.abs(u1.y - u2.y) <= 1) {
+            isConnected = true;
+          }
+        }
+
+        if (isConnected) {
+          adj.get(u1.h)!.add(u2.h);
+          adj.get(u2.h)!.add(u1.h);
+        }
+      }
+    }
+
+    // BFS でプレイヤーの連結成分を求める（手繋ぎを含む）
+    const inPlayerComponent = new Set<string>();
+    const queue: string[] = [props.playerId];
+    inPlayerComponent.add(props.playerId);
+    while (queue.length > 0) {
+      const cur = queue.shift()!;
+      for (const neighbor of adj.get(cur) ?? []) {
+        if (!inPlayerComponent.has(neighbor)) {
+          inPlayerComponent.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
     }
 
     const connected: User[] = [];
     const online: User[] = [];
     for (const user of allUsers) {
-      const { y, x } = user;
-      const userIsland = ids.length > 0 && y >= 0 && y < ids.length && x >= 0 && x < ids[0].length ? ids[y][x] : 0;
-      if (userIsland !== 0 && userIsland === playerIslandId) {
+      if (inPlayerComponent.has(user.h)) {
         connected.push(user);
       } else {
         online.push(user);

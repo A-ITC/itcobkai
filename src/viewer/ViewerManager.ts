@@ -28,7 +28,6 @@ export default class Manager {
     await this.rtc.init(lkToken, audio);
     this.rtc.onDisconnect = () => this.onDisconnect();
     this.mc.init(canvas, (data: GuestMessage) => {
-      console.log(data);
       this.send(data);
     });
 
@@ -92,6 +91,7 @@ export default class Manager {
   }
 
   private send(data: GuestMessage) {
+    console.log(data);
     this.rtc.dataTo?.write(data);
   }
 
@@ -106,5 +106,6 @@ export default class Manager {
     }
     this.rtc.mute(mute);
     this.send({ command: GuestCommand.MUTE, mute });
+    this.onUpdate(this.users);
   }
 }

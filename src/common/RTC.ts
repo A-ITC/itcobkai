@@ -74,10 +74,6 @@ export class RTCClient {
   }
 }
 
-export const sendData = async (payload: object) => {
-  console.warn("sendData is deprecated. Use RTCClient.dataTo.write instead.");
-};
-
 export async function joinRoom(token: string, receiveData: (userId: string, payload: object) => void) {
   const room = new Room({ adaptiveStream: true, dynacast: true });
   await room.connect(`wss://${location.hostname}`, token);
