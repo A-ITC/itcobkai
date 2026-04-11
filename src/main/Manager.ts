@@ -1,8 +1,9 @@
 import { HostCommand, GuestCommand, User, HostMessage, GuestMessage } from "../common/Schema";
 import { RTCClient } from "../common/RTC";
+import request from "../common/Common";
 import Controller from "./Controller";
 
-// Viewerの肥大化を防ぐため処理部分を全てこちらに分離
+// Mainの肥大化を防ぐため処理部分を全てこちらに分離
 export default class Manager {
   private mc = new Controller();
   private rtc = new RTCClient();
@@ -16,8 +17,8 @@ export default class Manager {
     this.mc.onKeyDown(e);
   }
 
-  public onResize(e: UIEvent) {
-    this.mc.onResize(e);
+  public onResize() {
+    this.mc.onResize();
   }
 
   public init(playerId: string) {
@@ -43,7 +44,10 @@ export default class Manager {
           this.mc.setUsers(this.users);
           break;
         case HostCommand.MOVED:
-          data.moves.forEach(move => {
+          for (const move of data.moves) {
+            if (!this.users[move.h]) {
+              await this.fetchUser(move.h);
+            }
             if (this.users[move.h]) {
               this.users[move.h].x = move.x;
               this.users[move.h].y = move.y;
@@ -51,7 +55,7 @@ export default class Manager {
             if (move.h === this.playerId) {
               this.mc.jumpTo(move.x, move.y);
             }
-          });
+          }
           this.mc.setUsers(this.users);
           break;
         case HostCommand.UPDATED:
@@ -63,6 +67,9 @@ export default class Manager {
           this.mc.setUsers(this.users);
           break;
         case HostCommand.MUTED:
+          if (!this.users[data.h]) {
+            await this.fetchUser(data.h);
+          }
           if (this.users[data.h]) {
             this.users[data.h].mute = data.mute;
             this.mc.setUsers(this.users);
@@ -95,6 +102,13 @@ export default class Manager {
     this.rtc.dataTo?.write(data);
   }
 
+  private async fetchUser(h: string): Promise<void> {
+    const user = await request("GET", `/users/${h}`);
+    if (user) {
+      this.users[h] = user;
+    }
+  }
+
   public end() {
     this.rtc.end();
   }
@@ -102,10 +116,11 @@ export default class Manager {
   public mute() {
     const mute = !(this.users[this.playerId]?.mute ?? false);
     if (this.users[this.playerId]) {
-      this.users[this.playerId].mute = mute;
+      this.users[this.playerId] = { ...this.users[this.playerId], mute };
     }
     this.rtc.mute(mute);
     this.send({ command: GuestCommand.MUTE, mute });
     this.onUpdate(this.users);
+    this.mc.refresh();
   }
 }

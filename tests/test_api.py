@@ -434,3 +434,45 @@ class TestApiUsersMe:
             json={"name": "Alice", "year": 1, "groups": [], "greeting": "g" * 401},
         )
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# /api/users/{h}
+# ---------------------------------------------------------------------------
+
+
+class TestApiUsersH:
+    async def test_get_user_without_auth_returns_401(self, client):
+        """Authorization ヘッダーなしは 401"""
+        resp = await client.get("/api/users/testhash123")
+        assert resp.status_code == 401
+
+    async def test_get_user_returns_user(self, client, valid_auth_header):
+        """有効なトークンと存在するユーザーなら情報を返す"""
+        UserStore._users["otherhash456"] = make_test_user("otherhash456", "Bob")
+        resp = await client.get("/api/users/otherhash456", headers=valid_auth_header)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["h"] == "otherhash456"
+        assert body["name"] == "Bob"
+
+    async def test_get_user_not_found_returns_404(self, client, valid_auth_header):
+        """UserStore に存在しないユーザーは 404"""
+        resp = await client.get(
+            "/api/users/nonexistent_hash_xyz", headers=valid_auth_header
+        )
+        assert resp.status_code == 404
+
+    async def test_get_user_returns_current_position(self, client, valid_auth_header):
+        """取得したユーザー情報に set_position で更新した座標が含まれる"""
+        from api.master.user import us as user_store
+
+        user = make_test_user("otherhash456", "Bob")
+        UserStore._users["otherhash456"] = user
+        user_store.set_position("otherhash456", 10, 20)
+
+        resp = await client.get("/api/users/otherhash456", headers=valid_auth_header)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["x"] == 10
+        assert body["y"] == 20

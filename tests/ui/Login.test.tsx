@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@solidjs/testing-library";
-import Login from "../../src/Login";
+import Login from "../../src/pages/Login";
 
 // window.location はテストごとに必要なセットが異なるため saveRestore で管理
 const originalLocation = window.location;

@@ -2,13 +2,17 @@ from json import load
 from logging import getLogger
 from asyncio import create_task, sleep, gather
 from fastapi import FastAPI
-from ..rtc.rtc import mixing_loop, lkapi, connects, active_sessions
+from ..rtc.rtc import lkapi
+from ..rtc.mixer import mixing_loop
+from ..rtc.state import connects, active_sessions, audio_tasks
 from contextlib import asynccontextmanager
 from ..master.user import us
 from ..rtc.adapter import HostCommand, MovedCommand, send_message
 from ..utils.schema import MapMeta
 from ..utils.logger import init_logger
-from ..master.mapper import MapRaw, mapper, connections_to_islands
+from ..master.grid import MapRaw
+from ..master.mapper import mapper
+from ..master.connections import connections_to_islands
 from api.utils.config import MAPS_JSON
 
 logger = getLogger(__name__)
@@ -57,6 +61,11 @@ async def lifespan(app: FastAPI):
     mixing_task.cancel()
     ticker_task.cancel()
     await gather(mixing_task, ticker_task, return_exceptions=True)
+    # _process_user_audio タスクをキャンセルし AudioStream.aclose() で FFI サブスクリプションを解除
+    _audio_tasks = list(audio_tasks)
+    for task in _audio_tasks:
+        task.cancel()
+    await gather(*_audio_tasks, return_exceptions=True)
     for session in list(active_sessions.values()):
         try:
             await session.room.disconnect()
@@ -64,3 +73,7 @@ async def lifespan(app: FastAPI):
             pass
     active_sessions.clear()
     await lkapi.aclose()
+    # LiveKit の FFI ネイティブスレッドが disconnect 後も teardown イベントを送出し続けるため、
+    # イベントループが閉じる前に "error putting to queue: Event loop is closed" が出る。
+    # 短い待機でコールバックを排出させることで警告を抑制する。
+    await sleep(0.5)

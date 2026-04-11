@@ -46,7 +46,10 @@ async def auth(authorization: str = Header(None)) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
     token = authorization.split()[-1]
-    payload = decode(token)
+    try:
+        payload = decode(token)
+    except (ValueError, PermissionError):
+        raise HTTPException(status_code=401, detail="Invalid token")
     if time() - payload["iat"] > TTL:
         raise HTTPException(status_code=401, detail="Token expired")
     return payload["h"]

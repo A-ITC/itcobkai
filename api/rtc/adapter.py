@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import dataclass
 from enum import StrEnum, auto
-from .rtc import send_raw_message, active_sessions, handler
+from .state import send_raw_message, active_sessions, handler
 from ..utils.schema import MapMeta, Move
 
 

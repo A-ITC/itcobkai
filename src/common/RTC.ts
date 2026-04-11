@@ -17,7 +17,7 @@ export class RTCClient {
   public onDisconnect?: () => void;
 
   public async init(token: string, _audio: HTMLAudioElement) {
-    await beep();
+    beep();
 
     this.room = new Room({
       adaptiveStream: true,

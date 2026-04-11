@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
-import Setup from "../../src/Setup";
+import Setup from "../../src/pages/Setup";
 
 // @solidjs/router の useNavigate をモック
 const mockNavigate = vi.fn();

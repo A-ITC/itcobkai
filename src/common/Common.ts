@@ -44,8 +44,11 @@ export default async function request(method: Method, path: string, post: any = 
     ...(method !== "GET" ? { body: JSON.stringify(post) } : {})
   });
   if (!res.ok) {
-    location.href = `/${URI_PREFIX}#/login`;
-    return;
+    if (res.status === 401) {
+      location.href = `/${URI_PREFIX}#/login`;
+      return;
+    }
+    throw new Error(`HTTP ${res.status}`);
   }
   const json = await res.json();
   return json;

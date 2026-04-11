@@ -40,11 +40,11 @@ export default function Setup() {
       return;
     }
     const user = await meRes.json();
+    // 名前が設定済みならセットアップ不要なのでメイン画面へリダイレクト
     if (user.name) {
       navigate("/", { replace: true });
       return;
     }
-
     // 既存データでフォームを初期化（再編集に備えて）
     if (user.year > 0) setYear(user.year);
     if (Array.isArray(user.groups)) setGroups(user.groups as Group[]);

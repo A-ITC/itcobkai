@@ -132,7 +132,7 @@ export function VoicePanel(props: VoicePanelProps) {
   });
 
   return (
-    <div class="w-64 md:w-72 bg-gray-800/50 p-5 border-l border-gray-700 flex flex-col shrink-0">
+    <div class="w-full md:w-72 bg-gray-800/50 p-5 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col shrink-0">
       {/* 操作ボタン */}
       <div class="flex gap-2 mb-5">
         <Show
@@ -173,7 +173,7 @@ export function VoicePanel(props: VoicePanelProps) {
       </div>
 
       {/* スクロール可能なユーザーリスト */}
-      <div class="flex-1 overflow-y-auto pr-1 custom-scrollbar">
+      <div class="flex-1 overflow-y-auto pr-1 custom-scrollbar max-h-48 md:max-h-none">
         <Show when={sections().connected.length > 0}>
           <div class="text-[10px] font-bold text-green-400 uppercase tracking-wider px-2 mb-1">接続中</div>
           <div class="space-y-1 mb-3">

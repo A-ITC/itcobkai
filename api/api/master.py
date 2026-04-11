@@ -1,7 +1,8 @@
 from json import load
 from logging import getLogger
 from pydantic import BaseModel
-from ..rtc.rtc import lkapi, active_sessions, init_room
+from ..rtc.rtc import lkapi, init_room
+from ..rtc.state import active_sessions
 from livekit.api import RoomParticipantIdentity
 from ..master.user import us
 from ..rtc.adapter import (
@@ -12,9 +13,10 @@ from ..rtc.adapter import (
     send_message,
     send_message_all,
 )
-from ..utils.config import APP_NAME, MAPS_JSON
+from ..master.grid import MapRaw
+from ..utils.config import MAPS_JSON
 from ..utils.schema import MapMeta, Move
-from ..master.mapper import MapRaw, mapper
+from ..master.mapper import mapper
 from fastapi.responses import JSONResponse
 
 logger = getLogger(__name__)
@@ -52,6 +54,7 @@ async def master_request(post: MasterRequest):
             moves: list[Move] = []
             for session_h in list(active_sessions.keys()):
                 move = mapper.new_user(session_h)
+                us.set_position(session_h, move.x, move.y)
                 moves.append(move)
             await send_message_all(
                 HostCommand.NEWMAP, NewmapCommand(map=mapper.get_map_meta())
@@ -67,10 +70,9 @@ async def master_request(post: MasterRequest):
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:
-        target_h = post.h
         try:
             await lkapi.room.remove_participant(
-                RoomParticipantIdentity(room=APP_NAME, identity=target_h)
+                RoomParticipantIdentity(room=post.h, identity=post.h)
             )
         except Exception as e:
             return JSONResponse(content={"error": str(e)}, status_code=400)

@@ -32,8 +32,8 @@ from livekit.rtc import DataPacket, Room
 
 from api.rtc.adapter import GuestCommand, HostCommand
 from api.utils.config import APP_NAME, DOMAIN
-from api.rtc.rtc import active_sessions, create_token, init_room
-from api.rtc.rtc import connects
+from api.rtc.rtc import create_token, init_room
+from api.rtc.state import active_sessions, connects
 from api.master.user import User, UserStore
 from api.api.lifespan import _position_ticker
 from tests.conftest import make_test_user

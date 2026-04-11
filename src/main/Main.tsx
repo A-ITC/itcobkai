@@ -1,8 +1,8 @@
-import { createSignal, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount } from "solid-js";
 import { VoicePanel } from "./VoicePanel";
 import { User } from "../common/Schema";
 import request from "../common/Common";
-import Manager from "./ViewerManager";
+import Manager from "./Manager";
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
@@ -15,6 +15,9 @@ export default function Main() {
 
   onMount(() => {
     console.log("App mounted");
+    const handleResize = () => manager.onResize();
+    window.addEventListener("resize", handleResize);
+    onCleanup(() => window.removeEventListener("resize", handleResize));
   });
 
   async function connectButton() {
@@ -52,8 +55,8 @@ export default function Main() {
 
   return (
     <div class="bg-gray-800 text-gray-200 min-h-screen flex items-center justify-center p-4">
-      {/* メインコンテナ: flex-row で横並びを維持 */}
-      <div class="flex flex-row bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700 max-w-full">
+      {/* メインコンテナ: モバイルは縦並び、md以上は横並び */}
+      <div class="flex flex-col md:flex-row bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700 max-w-full">
         {/* 左側: メインエリア (Header + Canvas) */}
         <div class="p-6 flex flex-col items-center">
           <div class="w-full">
@@ -65,9 +68,7 @@ export default function Main() {
             <canvas
               ref={canvasRef}
               onKeyDown={e => manager.onKeyDown(e)}
-              onResize={e => manager.onResize(e)}
-              /* aspect-square で強制的に正方形にする */
-              class="aspect-square w-[300px] sm:w-[450px] md:w-[600px] h-auto block touch-none"
+              class="block touch-none"
               tabIndex="0" // キーボード操作を受け付けるために必要
             ></canvas>
             <audio ref={audioRef}></audio>

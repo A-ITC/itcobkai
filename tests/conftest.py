@@ -24,9 +24,11 @@ from httpx import AsyncClient, ASGITransport
 import api.master.master  # noqa: F401 — @on_message/@on_join/@on_leave ハンドラーを登録
 from api.api.router import router, _check_localhost
 from api.api.auth import encode
-from api.rtc.rtc import active_sessions, lkapi, muted_users
+from api.rtc.rtc import lkapi
+from api.rtc.state import active_sessions, muted_users
 from api.master.user import User, UserStore
-from api.master.mapper import MapRaw, mapper
+from api.master.grid import MapRaw
+from api.master.mapper import mapper
 from api.utils.schema import MapMeta
 
 

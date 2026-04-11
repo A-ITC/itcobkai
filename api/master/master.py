@@ -1,5 +1,5 @@
 from .mapper import mapper
-from ..rtc.rtc import set_mute
+from ..rtc.state import set_mute
 from .user import User, us
 
 from ..rtc.adapter import (

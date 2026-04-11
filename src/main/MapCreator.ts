@@ -128,11 +128,14 @@ export default class MapCreater {
   }
 
   public resize() {
-    const maxWidth = window.innerWidth - 400;
-    const maxHeight = window.innerHeight - 190;
-    const size = Math.min(maxHeight, maxWidth);
+    const mobile = window.innerWidth < 768;
+    const maxWidth = mobile ? window.innerWidth - 32 : window.innerWidth - 288 - 48;
+    const maxHeight = mobile ? window.innerHeight - 70 - 220 : window.innerHeight - 80;
+    const size = Math.max(120, Math.min(maxWidth, maxHeight));
     this.canvas.width = size;
     this.canvas.height = size;
+    storage.outer = Math.max(8, Math.min(20, Math.round(size / 40)));
+    storage.inner = Math.max(1, Math.floor(storage.outer / 3));
   }
 
   public touchAction(move: Function) {

@@ -48,6 +48,14 @@ async def get_me(h=Depends(auth)):
     return user.model_dump()
 
 
+@router.get("/api/users/{target_h}")
+async def get_user(target_h: str, h=Depends(auth)):
+    user = us.get(target_h)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user.model_dump()
+
+
 @router.post("/api/users/@me")
 async def update_me(body: UserUpdateRequest, h=Depends(auth)):
     current = us.get(h)

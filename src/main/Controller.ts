@@ -22,8 +22,10 @@ export default class Controller {
     else if (e.key === "d" || e.key === "ArrowRight") this.move(1, 0);
   }
 
-  public onResize(e: UIEvent) {
+  public onResize() {
     this.mc.resize();
+    const { x, y } = this.cropper.get();
+    this.cropper.jump(x, y);
     this.refresh();
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@solidjs/testing-library";
 import userEvent from "@testing-library/user-event";
 import { User } from "../../src/common/Schema";
-import Viewer from "../../src/viewer/Main";
+import Viewer from "../../src/main/Main";
 
 // ──────────────────────────────────────────────────────────
 // モック定義
@@ -24,7 +24,7 @@ const { mockRequest, mockManager } = vi.hoisted(() => {
   return { mockRequest, mockManager };
 });
 
-vi.mock("../../src/viewer/ViewerManager", () => ({
+vi.mock("../../src/main/Manager", () => ({
   // 通常関数（arrow function 不可）を使い new Manager() が mockManager を返すようにする
   default: vi.fn().mockImplementation(function () {
     return mockManager;

@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from api.rtc.adapter import GuestCommand, HostCommand, handler
-from api.rtc.rtc import active_sessions, muted_users
+from api.rtc.state import active_sessions, muted_users
 from api.master.user import User, UserStore
 from api.master.mapper import mapper
 from tests.conftest import make_test_user

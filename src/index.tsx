@@ -1,9 +1,9 @@
 /* @refresh reload */
 import { HashRouter, Route } from "@solidjs/router";
 import { render } from "solid-js/web";
-import Main from "./viewer/Main";
-import Login from "./Login";
-import Setup from "./Setup";
+import Main from "./main/Main";
+import Login from "./pages/Login";
+import Setup from "./pages/Setup";
 import "./index.css";
 
 window.onload = () => {
