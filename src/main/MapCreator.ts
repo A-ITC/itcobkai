@@ -10,6 +10,14 @@ export default class MapCreater {
 
   constructor() {
     this.ctx = this.canvas.getContext("2d")!;
+    // コンストラクタ時点では this.canvas はダミー要素のため storage だけ更新する
+    MapCreater.updateStorage();
+  }
+
+  /** canvas を差し替える（init 直後に canvasRef をセットするために使用） */
+  public setCanvas(canvas: HTMLCanvasElement) {
+    this.canvas = canvas;
+    this.ctx = this.canvas.getContext("2d")!;
     this.resize();
   }
 
@@ -127,15 +135,21 @@ export default class MapCreater {
     }
   }
 
-  public resize() {
+  /** ウィンドウサイズから canvas の一辺サイズを計算し storage を更新して返す */
+  public static updateStorage(): number {
     const mobile = window.innerWidth < 768;
     const maxWidth = mobile ? window.innerWidth - 32 : window.innerWidth - 288 - 48;
     const maxHeight = mobile ? window.innerHeight - 70 - 220 : window.innerHeight - 80;
     const size = Math.max(120, Math.min(maxWidth, maxHeight));
-    this.canvas.width = size;
-    this.canvas.height = size;
     storage.outer = Math.max(8, Math.min(20, Math.round(size / 40)));
     storage.inner = Math.max(1, Math.floor(storage.outer / 3));
+    return size;
+  }
+
+  public resize() {
+    const size = MapCreater.updateStorage();
+    this.canvas.width = size;
+    this.canvas.height = size;
   }
 
   public touchAction(move: Function) {

@@ -3,6 +3,7 @@ import { VoicePanel } from "./VoicePanel";
 import { User } from "../common/Schema";
 import request from "../common/Common";
 import Manager from "./Manager";
+import MapCreater from "./MapCreator";
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
@@ -15,9 +16,18 @@ export default function Main() {
 
   onMount(() => {
     console.log("App mounted");
-    const handleResize = () => manager.onResize();
-    window.addEventListener("resize", handleResize);
-    onCleanup(() => window.removeEventListener("resize", handleResize));
+    // DOM に canvas がある状態で初期サイズを確定させる
+    const applySize = () => {
+      const size = MapCreater.updateStorage();
+      if (canvasRef) {
+        canvasRef.width = size;
+        canvasRef.height = size;
+      }
+      manager.onResize();
+    };
+    applySize();
+    window.addEventListener("resize", applySize);
+    onCleanup(() => window.removeEventListener("resize", applySize));
   });
 
   async function connectButton() {

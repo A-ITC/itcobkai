@@ -34,6 +34,8 @@ export default class Controller {
     this.message = message;
     this.canvas = canvas;
     this.mc = new MapCreater();
+    // canvasRef を mc に設定しておくことで、newMap前のresizeでも実canvasにサイズが反映される
+    this.mc.setCanvas(canvas);
     this.cropper = new Cropper(this.mc.map, 0, 0);
     ticker.move = () => {
       // 位置が変わっていたらサーバーに送信
