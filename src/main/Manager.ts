@@ -1,7 +1,9 @@
 import { HostCommand, GuestCommand, User, HostMessage, GuestMessage } from "../common/Schema";
 import { RTCClient } from "../common/RTC";
-import request from "../common/Common";
 import Controller from "./Controller";
+import request from "../common/Common";
+import Toastify from "toastify-js";
+import "toastify-js/src/toastify.css";
 
 // Mainの肥大化を防ぐため処理部分を全てこちらに分離
 export default class Manager {
@@ -42,6 +44,7 @@ export default class Manager {
         case HostCommand.JOINED:
           this.users[data.user.h] = data.user;
           this.mc.setUsers(this.users);
+          Toastify({ text: `${data.user.name} が参加しました`, duration: 3000 }).showToast();
           break;
         case HostCommand.MOVED:
           for (const move of data.moves) {
@@ -62,10 +65,13 @@ export default class Manager {
           this.users[data.user.h] = data.user;
           this.mc.setUsers(this.users);
           break;
-        case HostCommand.LEFT:
+        case HostCommand.LEFT: {
+          const leftName = this.users[data.h]?.name ?? data.h;
           delete this.users[data.h];
           this.mc.setUsers(this.users);
+          Toastify({ text: `${leftName} が退出しました`, duration: 3000 }).showToast();
           break;
+        }
         case HostCommand.MUTED:
           if (!this.users[data.h]) {
             await this.fetchUser(data.h);

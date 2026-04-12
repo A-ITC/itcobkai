@@ -195,7 +195,7 @@ export function VoicePanel(props: VoicePanelProps) {
 function UserItem(props: { user: User }) {
   return (
     <div class="flex items-center gap-3 py-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
-      <div class="relative flex-shrink-0">
+      <div class="relative shrink-0">
         <img
           src={`/dist/images/${props.user.avatar}`}
           alt="avatar"

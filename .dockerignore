@@ -1,0 +1,15 @@
+.git/
+.gitignore
+.venv/
+node_modules/
+local/
+dist/
+data/
+.env
+env.*
+tests/
+tools/
+test.py
+*\ copy.*
+*_old/
+_*/

@@ -1,20 +1,18 @@
-import dataclasses
-from dataclasses import dataclass
 from enum import StrEnum, auto
+from pydantic import BaseModel, Field
 from .state import send_raw_message, active_sessions, handler
 from ..utils.schema import MapMeta, Move
 
 
 class HostCommand(StrEnum):
-    ALERT = auto()
-    MESSAGE = auto()
-    JOINED = auto()
-    MOVED = auto()
-    UPDATED = auto()
-    LEFT = auto()
-    INIT = auto()
-    NEWMAP = auto()
-    MUTED = auto()
+    ALERT = "ALERT"
+    JOINED = "JOINED"
+    MOVED = "MOVED"
+    UPDATED = "UPDATED"
+    LEFT = "LEFT"
+    INIT = "INIT"
+    NEWMAP = "NEWMAP"
+    MUTED = "MUTED"
 
 
 class GuestCommand(StrEnum):
@@ -24,59 +22,53 @@ class GuestCommand(StrEnum):
 
 
 # ---------------------------------------------------------------------------
-# Command payload dataclasses
+# Command payload models
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class Command:
-    """Base class for all HostCommand payload dataclasses."""
+class Command(BaseModel):
+    """Base class for all HostCommand payload models."""
 
 
-@dataclass
 class AlertCommand(Command):
+    command: HostCommand = Field(default=HostCommand.ALERT, init=False)
     text: str
     reload: bool = False
 
 
-@dataclass
-class MessageCommand(Command):
-    text: str
-
-
-@dataclass
 class JoinedCommand(Command):
+    command: HostCommand = Field(default=HostCommand.JOINED, init=False)
     user: dict
 
 
-@dataclass
 class MovedCommand(Command):
+    command: HostCommand = Field(default=HostCommand.MOVED, init=False)
     moves: list[Move]
 
 
-@dataclass
 class UpdatedCommand(Command):
+    command: HostCommand = Field(default=HostCommand.UPDATED, init=False)
     user: dict
 
 
-@dataclass
 class LeftCommand(Command):
+    command: HostCommand = Field(default=HostCommand.LEFT, init=False)
     h: str
 
 
-@dataclass
 class InitCommand(Command):
+    command: HostCommand = Field(default=HostCommand.INIT, init=False)
     users: list[dict]
     map: MapMeta
 
 
-@dataclass
 class NewmapCommand(Command):
+    command: HostCommand = Field(default=HostCommand.NEWMAP, init=False)
     map: MapMeta
 
 
-@dataclass
 class MutedCommand(Command):
+    command: HostCommand = Field(default=HostCommand.MUTED, init=False)
     h: str
     mute: bool
 
@@ -86,21 +78,19 @@ class MutedCommand(Command):
 # ---------------------------------------------------------------------------
 
 
-async def send_message(h: str, command: HostCommand, payload: Command):
-    await send_raw_message(
-        h, {"command": command.value.upper(), **dataclasses.asdict(payload)}
-    )
+async def send_message(h: str, payload: Command):
+    await send_raw_message(h, payload.model_dump())
 
 
-async def send_message_all(command: HostCommand, payload: Command):
+async def send_message_all(payload: Command):
     for h in list(active_sessions.keys()):
-        await send_message(h, command, payload)
+        await send_message(h, payload)
 
 
-async def send_message_others(sender_h: str, command: HostCommand, payload: Command):
+async def send_message_others(sender_h: str, payload: Command):
     for h in list(active_sessions.keys()):
         if h != sender_h:
-            await send_message(h, command, payload)
+            await send_message(h, payload)
 
 
 # ---------------------------------------------------------------------------

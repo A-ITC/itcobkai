@@ -37,7 +37,6 @@ export interface MapRaw {
 
 export enum HostCommand {
   ALERT = "ALERT",
-  MESSAGE = "MESSAGE",
   JOINED = "JOINED",
   MOVED = "MOVED",
   UPDATED = "UPDATED",
@@ -55,7 +54,6 @@ export enum GuestCommand {
 
 export type HostMessage =
   | { command: HostCommand.ALERT; text: string; reload?: boolean }
-  | { command: HostCommand.MESSAGE; text: string }
   | { command: HostCommand.JOINED; user: User }
   | { command: HostCommand.MOVED; moves: Move[] }
   | { command: HostCommand.UPDATED; user: User }

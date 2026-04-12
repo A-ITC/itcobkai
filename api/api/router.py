@@ -11,7 +11,7 @@ from ..master.user import us, User
 from api.api.master import MasterRequest, master_request
 from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME
 from fastapi.responses import JSONResponse, FileResponse
-from ..rtc.adapter import HostCommand, UpdatedCommand, send_message_others
+from ..rtc.adapter import UpdatedCommand, send_message_others
 
 router = APIRouter()
 
@@ -72,9 +72,7 @@ async def update_me(body: UserUpdateRequest, h=Depends(auth)):
         y=current.y,
     )
     us.upsert(updated)
-    await send_message_others(
-        h, HostCommand.UPDATED, UpdatedCommand(user=updated.model_dump())
-    )
+    await send_message_others(h, UpdatedCommand(user=updated.model_dump()))
     return updated.model_dump()
 
 

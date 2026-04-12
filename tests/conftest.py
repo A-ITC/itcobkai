@@ -25,7 +25,7 @@ import api.master.master  # noqa: F401 — @on_message/@on_join/@on_leave ハン
 from api.api.router import router, _check_localhost
 from api.api.auth import encode
 from api.rtc.rtc import lkapi
-from api.rtc.state import active_sessions, muted_users
+from api.rtc.state import active_sessions, muted_users, connects
 from api.master.user import User, UserStore
 from api.master.grid import MapRaw
 from api.master.mapper import mapper
@@ -51,11 +51,13 @@ def reset_state():
     UserStore._users.clear()
     active_sessions.clear()
     muted_users.clear()
+    connects([])
     mapper.reset()
     yield
     UserStore._users.clear()
     active_sessions.clear()
     muted_users.clear()
+    connects([])
     mapper.reset()
 
 

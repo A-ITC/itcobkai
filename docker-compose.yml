@@ -22,3 +22,21 @@ services:
           domain: ${DOMAIN}
           udp_port: ${UDP_PORT}
     command: --dev
+
+  # app:
+  #   build:
+  #     context: .
+  #     args:
+  #       DOMAIN: ${DOMAIN}
+  #       VITE_DISCORD_CLIENT_ID: ${VITE_DISCORD_CLIENT_ID}
+  #       VITE_APP_NAME: ${VITE_APP_NAME:-itcobkai}
+  #   container_name: app
+  #   restart: unless-stopped
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "${API_PORT:-41022}:${API_PORT:-41022}"
+  #   volumes:
+  #     - ./data:/app/data
+  #   depends_on:
+  #     - livekit

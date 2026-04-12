@@ -4,7 +4,6 @@ from .user import User, us
 
 from ..rtc.adapter import (
     GuestCommand,
-    HostCommand,
     InitCommand,
     JoinedCommand,
     LeftCommand,
@@ -33,17 +32,13 @@ async def _(h: str, message: dict):
                 if pos:
                     user.x, user.y = pos.x, pos.y
                 us.upsert(user)
-                await send_message_others(
-                    h, HostCommand.UPDATED, UpdatedCommand(user=user.model_dump())
-                )
+                await send_message_others(h, UpdatedCommand(user=user.model_dump()))
             except Exception:
                 raise ValueError("Invalid user data")
         case GuestCommand.MUTE:
             muted = bool(message["mute"])
             set_mute(h, muted)
-            await send_message_others(
-                h, HostCommand.MUTED, MutedCommand(h=h, mute=muted)
-            )
+            await send_message_others(h, MutedCommand(h=h, mute=muted))
         case _:
             raise NotImplementedError("on_message handler is not implemented")
 
@@ -72,20 +67,17 @@ async def _(h: str):
     # 新規ユーザーに INIT 送信
     await send_message(
         h,
-        HostCommand.INIT,
         InitCommand(users=users, map=m.get_map_meta()),
     )
 
     # 既存ユーザーへ JOIN ブロードキャスト
     user = us.get(h)
     if user:
-        await send_message_others(
-            h, HostCommand.JOINED, JoinedCommand(user=user.model_dump())
-        )
+        await send_message_others(h, JoinedCommand(user=user.model_dump()))
 
 
 @on_leave
 async def _(h: str):
     if mapper:
         mapper.remove_user(h)
-    await send_message_all(HostCommand.LEFT, LeftCommand(h=h))
+    await send_message_all(LeftCommand(h=h))

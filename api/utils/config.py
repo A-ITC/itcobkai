@@ -21,7 +21,6 @@ DISCORD_ALLOWED_SERVERS = environ.get("DISCORD_ALLOWED_SERVERS")
 
 # アプリケーション関連
 SECRET_KEY = environ.get("SECRET_KEY")
-TOKEN_EXPIRATION = int(environ.get("TOKEN_EXPIRATION", 1800))
 DEV_PORT = int(environ.get("DEV_PORT", 41021))
 API_PORT = int(environ.get("API_PORT", 41022))
 

@@ -7,7 +7,6 @@ from livekit.api import RoomParticipantIdentity
 from ..master.user import us
 from ..rtc.adapter import (
     AlertCommand,
-    HostCommand,
     MovedCommand,
     NewmapCommand,
     send_message,
@@ -33,9 +32,7 @@ class MasterRequest(BaseModel):
 async def master_request(post: MasterRequest):
     if post.command == "ALERT":
         text = post.text or ""
-        await send_message_all(
-            HostCommand.ALERT, AlertCommand(text=text, reload=post.reload)
-        )
+        await send_message_all(AlertCommand(text=text, reload=post.reload))
         return {"ok": True}
 
     if post.command == "NEWMAP" and post.map:
@@ -56,17 +53,13 @@ async def master_request(post: MasterRequest):
                 move = mapper.new_user(session_h)
                 us.set_position(session_h, move.x, move.y)
                 moves.append(move)
-            await send_message_all(
-                HostCommand.NEWMAP, NewmapCommand(map=mapper.get_map_meta())
-            )
+            await send_message_all(NewmapCommand(map=mapper.get_map_meta()))
             if moves:
                 # 自分自身の座標は送信しない（クライアント側の座標を優先）
                 for recipient_h in list(active_sessions.keys()):
                     others = [mv for mv in moves if mv.h != recipient_h]
                     if others:
-                        await send_message(
-                            recipient_h, HostCommand.MOVED, MovedCommand(moves=others)
-                        )
+                        await send_message(recipient_h, MovedCommand(moves=others))
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:

@@ -1,9 +1,9 @@
 import { createSignal, onCleanup, onMount } from "solid-js";
 import { VoicePanel } from "./VoicePanel";
+import MapCreater from "./MapCreator";
 import { User } from "../common/Schema";
 import request from "../common/Common";
 import Manager from "./Manager";
-import MapCreater from "./MapCreator";
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
@@ -106,9 +106,7 @@ function HeaderBar() {
     <div class="flex items-center justify-between mb-4 w-full">
       <div class="flex items-center gap-3">
         <div class="text-2xl font-bold text-white tracking-tight">ITCOBKAI</div>
-        <span class="text-[10px] bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded border border-blue-500/30">OB会</span>
       </div>
-      <div class="text-sm text-gray-400 font-medium">Map View</div>
     </div>
   );
 }

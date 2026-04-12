@@ -29,11 +29,24 @@ export default class MapCreater {
     this.map = await this.loadMap(mapraw);
   }
 
-  public async draw(users: User[], left: number, top: number) {
+  public async preloadAvatars(users: User[]): Promise<void> {
+    await Promise.all(
+      users.map(async user => {
+        const avatarUrl = `/dist/images/${user.avatar}`;
+        if (!this.avatars[user.h] || !this.avatars[user.h].src.endsWith(avatarUrl)) {
+          const img = new Image();
+          await loadImage(avatarUrl, img);
+          this.avatars[user.h] = img;
+        }
+      })
+    );
+  }
+
+  public draw(users: User[], left: number, top: number) {
     // 描画
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBottom(left, top);
-    await this.drawUsers(users, left, top);
+    this.drawUsers(users, left, top);
     this.drawTop(left, top);
   }
 
@@ -56,28 +69,26 @@ export default class MapCreater {
     return map;
   }
 
-  private async drawUsers(users: User[], left: number, top: number) {
+  private drawUsers(users: User[], left: number, top: number) {
     for (const user of users) {
       const i = user.x - left;
       const j = user.y - top;
       if (i < 0 || storage.outer <= i) continue;
       if (j < 0 || storage.outer <= j) continue;
-      await this.drawUser(user, i, j);
+      this.drawUser(user, i, j);
     }
   }
 
-  private async drawUser(user: User, i: number, j: number) {
+  private drawUser(user: User, i: number, j: number) {
     const grid = this.canvas.width / storage.outer;
+    const avatarUrl = `/dist/images/${user.avatar}`;
+    const avatar = this.avatars[user.h];
+    if (!avatar || !avatar.src.endsWith(avatarUrl)) return; // 未キャッシュはスキップ（preloadAvatars済みなら発生しない）
     this.ctx.beginPath();
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
     this.ctx.save();
     this.ctx.clip();
-    const avatarUrl = `/dist/images/${user.avatar}`;
-    if (!this.avatars[user.h] || this.avatars[user.h].src !== avatarUrl) {
-      this.avatars[user.h] = new Image();
-      await loadImage(avatarUrl, this.avatars[user.h]);
-    }
-    this.ctx.drawImage(this.avatars[user.h], i * grid, j * grid, grid, grid);
+    this.ctx.drawImage(avatar, i * grid, j * grid, grid, grid);
     if (user.mute) {
       this.ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
       this.ctx.fillRect(i * grid, j * grid, grid, grid);
@@ -138,8 +149,11 @@ export default class MapCreater {
   /** ウィンドウサイズから canvas の一辺サイズを計算し storage を更新して返す */
   public static updateStorage(): number {
     const mobile = window.innerWidth < 768;
-    const maxWidth = mobile ? window.innerWidth - 32 : window.innerWidth - 288 - 48;
-    const maxHeight = mobile ? window.innerHeight - 70 - 220 : window.innerHeight - 80;
+    // 非モバイル: 外側 p-4(32px) + canvas 側 p-6(48px) + VoicePanel w-72(288px) = 368px
+    // モバイル  : 外側 p-4(32px) + canvas 側 p-6(48px)                           =  80px
+    const maxWidth = mobile ? window.innerWidth - 80 : window.innerWidth - 368;
+    // 非モバイル: 外側 p-4(32px) + canvas 側 p-6(48px) + ヘッダー(~48px) = 128px
+    const maxHeight = mobile ? window.innerHeight - 70 - 220 : window.innerHeight - 130;
     const size = Math.max(120, Math.min(maxWidth, maxHeight));
     storage.outer = Math.max(8, Math.min(20, Math.round(size / 40)));
     storage.inner = Math.max(1, Math.floor(storage.outer / 3));
@@ -148,8 +162,8 @@ export default class MapCreater {
 
   public resize() {
     const size = MapCreater.updateStorage();
-    this.canvas.width = size;
-    this.canvas.height = size;
+    if (this.canvas.width !== size) this.canvas.width = size;
+    if (this.canvas.height !== size) this.canvas.height = size;
   }
 
   public touchAction(move: Function) {

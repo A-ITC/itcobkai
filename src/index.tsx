@@ -1,9 +1,10 @@
 /* @refresh reload */
 import { HashRouter, Route } from "@solidjs/router";
 import { render } from "solid-js/web";
-import Main from "./main/Main";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
+import Main from "./main/Main";
+import "toastify-js/src/toastify.css";
 import "./index.css";
 
 window.onload = () => {

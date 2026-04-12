@@ -41,8 +41,8 @@ handler = Handler()
 
 
 def connects(islands: list[list[str]]):
-    global current_islands
-    current_islands = islands
+    current_islands.clear()
+    current_islands.extend(islands)
 
 
 def set_mute(h: str, muted: bool):

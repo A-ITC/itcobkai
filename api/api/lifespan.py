@@ -3,17 +3,17 @@ from logging import getLogger
 from asyncio import create_task, sleep, gather
 from fastapi import FastAPI
 from ..rtc.rtc import lkapi
+from contextlib import asynccontextmanager
 from ..rtc.mixer import mixing_loop
 from ..rtc.state import connects, active_sessions, audio_tasks
-from contextlib import asynccontextmanager
 from ..master.user import us
-from ..rtc.adapter import HostCommand, MovedCommand, send_message
-from ..utils.schema import MapMeta
-from ..utils.logger import init_logger
 from ..master.grid import MapRaw
+from ..rtc.adapter import MovedCommand, send_message
+from ..utils.schema import MapMeta
+from ..utils.config import MAPS_JSON
+from ..utils.logger import init_logger
 from ..master.mapper import mapper
 from ..master.connections import connections_to_islands
-from api.utils.config import MAPS_JSON
 
 logger = getLogger(__name__)
 
@@ -32,9 +32,7 @@ async def _position_ticker():
             for recipient_h in list(active_sessions.keys()):
                 others = [mv for mv in result.moves if mv.h != recipient_h]
                 if others:
-                    await send_message(
-                        recipient_h, HostCommand.MOVED, MovedCommand(moves=others)
-                    )
+                    await send_message(recipient_h, MovedCommand(moves=others))
 
 
 @asynccontextmanager
@@ -73,7 +71,3 @@ async def lifespan(app: FastAPI):
             pass
     active_sessions.clear()
     await lkapi.aclose()
-    # LiveKit の FFI ネイティブスレッドが disconnect 後も teardown イベントを送出し続けるため、
-    # イベントループが閉じる前に "error putting to queue: Event loop is closed" が出る。
-    # 短い待機でコールバックを排出させることで警告を抑制する。
-    await sleep(0.5)

@@ -88,7 +88,8 @@ export default class Controller {
       const { top, left } = this.cropper.get();
       const allUsers: User[] = [...Object.values(this.users)];
       if (this.player) allUsers.push(this.player);
-      await this.mc.draw(allUsers, left, top);
+      await this.mc.preloadAvatars(allUsers);
+      this.mc.draw(allUsers, left, top);
     } while (this.drawQueued);
     this.drawing = false;
   }
