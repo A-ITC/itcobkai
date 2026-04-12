@@ -66,7 +66,9 @@ async def mixing_loop():
         next_tick += FRAME_DURATION_S
 
         # 各ユーザーの最新 20ms 分の音声をキューから取り出しておく
-        for session in active_sessions.values():
+        # スナップショットを取ることで、await 中に active_sessions が変更されても
+        # RuntimeError: dictionary changed size during iteration を防ぐ
+        for session in list(active_sessions.values()):
             try:
                 # ジッターバッファ: キューに 2 フレーム以上貯まるまで読み始めない
                 if not session.primed:
@@ -83,27 +85,38 @@ async def mixing_loop():
 
         # 島ごとのミキシング（capture_frame ごとの coroutine を収集して並列実行）
         capture_coros = []
-        for island in current_islands:
+        # current_islands のスナップショット（このループ中に connects() が呼ばれても安全）
+        for island in list(current_islands):
+            # ミュートしていないユーザーの音声フレームを収集（O(N)）
+            # active_sessions.get() で確認と取得を一操作にまとめ KeyError を排除
+            frames = {}
+            for u in island:
+                s = active_sessions.get(u)
+                if s is not None and u not in muted_users:
+                    frames[u] = s.last_frame
+
+            # 全員の音声合計を int32 で一度だけ計算（O(N)）
+            total_sum: np.ndarray | None = (
+                np.sum(list(frames.values()), axis=0, dtype=np.int32)
+                if frames
+                else None
+            )
+
             for target_user in island:
                 session = active_sessions.get(target_user)
                 if not session:
                     continue
 
-                # 自分以外のミュートしていないユーザーの音声を合成
-                others = [
-                    active_sessions[u].last_frame
-                    for u in island
-                    if u != target_user
-                    and u in active_sessions
-                    and u not in muted_users
-                ]
-
-                if not others:
+                if total_sum is None:
+                    # 非ミュートユーザーが誰もいない
                     mixed = np.zeros(FRAME_SAMPLES, dtype=np.int16)
-                else:
-                    # 複数人の音声を加算 (int32 で計算してクリッピング防止)
-                    mixed_large = np.sum(others, axis=0, dtype=np.int32)
+                elif target_user in frames:
+                    # Total Sum から自分の音声を引く（O(1)）
+                    mixed_large = total_sum - frames[target_user].astype(np.int32)
                     mixed = np.clip(mixed_large, -32768, 32767).astype(np.int16)
+                else:
+                    # 自分がミュート中 → 自分の音声は total_sum に含まれていない
+                    mixed = np.clip(total_sum, -32768, 32767).astype(np.int16)
 
                 audio_frame = AudioFrame(
                     mixed.tobytes(), SAMPLE_RATE, NUM_CHANNELS, FRAME_SAMPLES

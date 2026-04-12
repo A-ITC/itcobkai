@@ -180,7 +180,7 @@ class TestOnMessageUpdate:
             )
 
         sent_to = {m["to"] for m in sent_messages}
-        assert HA not in sent_to, "送信者自身には UPDATED を送らない"
+        assert HA in sent_to, "UPDATE は send_message_all のため送信者自身にも届く"
         assert HB in sent_to
 
         commands = {m["msg"]["command"] for m in sent_messages}

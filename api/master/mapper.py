@@ -3,7 +3,12 @@ from logging import getLogger
 from dataclasses import replace
 from ..utils.schema import MapMeta, Move
 from .grid import MapRaw, Position, parse_grid, label_islands
-from .connections import Connection, LastUpdated, calculate_connections
+from .connections import (
+    Connection,
+    LastUpdated,
+    calculate_connections,
+    connections_to_islands,
+)
 
 logger = getLogger(__name__)
 
@@ -84,6 +89,13 @@ class Mapper:
     def get_map_meta(self) -> MapMeta:
         assert self._meta is not None, "MapMeta is not initialized"
         return self._meta
+
+    def get_current_islands(self) -> list[list[str]]:
+        """現在のユーザー位置から島グループを計算して返す（last_connections は変更しない）"""
+        current_connections = calculate_connections(
+            self.user_positions, self.island_ids, self.area
+        )
+        return connections_to_islands(current_connections)
 
     def last_updated(self) -> LastUpdated:
         current_connections = calculate_connections(

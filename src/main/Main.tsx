@@ -1,15 +1,19 @@
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { VoicePanel } from "./VoicePanel";
 import MapCreater from "./MapCreator";
+import ProfileForm from "./ProfileForm";
 import { User } from "../common/Schema";
 import request from "../common/Common";
 import Manager from "./Manager";
+
+type Tab = "map" | "edit";
 
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
   const [connected, setConnected] = createSignal(false);
   const [playerId, setPlayerId] = createSignal<string>("");
   const [area, setArea] = createSignal<boolean[][]>([]);
+  const [tab, setTab] = createSignal<Tab>("map");
   const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
@@ -70,11 +74,17 @@ export default function Main() {
         {/* 左側: メインエリア (Header + Canvas) */}
         <div class="p-6 flex flex-col items-center">
           <div class="w-full">
-            <HeaderBar />
+            <HeaderBar
+              tab={tab()}
+              onTabChange={setTab}
+            />
           </div>
 
-          {/* Canvas Container: 正方形を維持するための設定 */}
-          <div class="relative bg-gray-950 rounded border border-gray-700 overflow-hidden">
+          {/* Canvas Container: tab が map のときのみ表示、接続維持のため常時マウント */}
+          <div
+            class="relative bg-gray-950 rounded border border-gray-700 overflow-hidden"
+            style={{ display: tab() === "map" ? "block" : "none" }}
+          >
             <canvas
               ref={canvasRef}
               onKeyDown={e => manager.onKeyDown(e)}
@@ -83,6 +93,16 @@ export default function Main() {
             ></canvas>
             <audio ref={audioRef}></audio>
           </div>
+
+          {/* EDIT タブ: canvas と同じ位置にプロフィール設定フォームを表示 */}
+          <Show when={tab() === "edit"}>
+            <div class="relative bg-gray-950 rounded border border-gray-700 overflow-auto text-gray-200 p-2">
+              <ProfileForm
+                initialUser={users()[playerId()]}
+                onSaved={() => setTab("map")}
+              />
+            </div>
+          </Show>
         </div>
 
         {/* 右側: サイドパネル */}
@@ -101,11 +121,29 @@ export default function Main() {
 }
 
 // HeaderBar: タイトル部分
-function HeaderBar() {
+function HeaderBar(props: { tab: Tab; onTabChange: (t: Tab) => void }) {
   return (
     <div class="flex items-center justify-between mb-4 w-full">
       <div class="flex items-center gap-3">
         <div class="text-2xl font-bold text-white tracking-tight">ITCOBKAI</div>
+        <div class="flex rounded overflow-hidden border border-gray-600 text-sm">
+          <button
+            class={`px-2 transition-colors ${
+              props.tab === "map" ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
+            }`}
+            onClick={() => props.onTabChange("map")}
+          >
+            MAP
+          </button>
+          <button
+            class={`px-2 transition-colors ${
+              props.tab === "edit" ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
+            }`}
+            onClick={() => props.onTabChange("edit")}
+          >
+            EDIT
+          </button>
+        </div>
       </div>
     </div>
   );

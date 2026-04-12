@@ -1,5 +1,5 @@
 from .mapper import mapper
-from ..rtc.state import set_mute
+from ..rtc.state import set_mute, connects
 from .user import User, us
 
 from ..rtc.adapter import (
@@ -24,6 +24,7 @@ async def _(h: str, message: dict):
         case GuestCommand.MOVE:
             if mapper:
                 mapper.move(h, int(message["x"]), int(message["y"]))
+                connects(mapper.get_current_islands())
         case GuestCommand.UPDATE:
             try:
                 user = User.model_validate(message["user"])
@@ -32,7 +33,7 @@ async def _(h: str, message: dict):
                 if pos:
                     user.x, user.y = pos.x, pos.y
                 us.upsert(user)
-                await send_message_others(h, UpdatedCommand(user=user.model_dump()))
+                await send_message_all(UpdatedCommand(user=user.model_dump()))
             except Exception:
                 raise ValueError("Invalid user data")
         case GuestCommand.MUTE:
@@ -75,9 +76,12 @@ async def _(h: str):
     if user:
         await send_message_others(h, JoinedCommand(user=user.model_dump()))
 
+    connects(m.get_current_islands())
+
 
 @on_leave
 async def _(h: str):
     if mapper:
         mapper.remove_user(h)
+        connects(mapper.get_current_islands())
     await send_message_all(LeftCommand(h=h))

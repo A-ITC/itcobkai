@@ -396,6 +396,8 @@ async def test_lk_mixing_output_frame_size_is_20ms(audio_rooms):
             pass
 
     assert received_frame is not None, "HB に音声フレームが届かなかった"
-    assert len(received_frame) == FRAME_SAMPLES, (
-        f"フレームサイズが期待値と異なる: {len(received_frame)} != {FRAME_SAMPLES} (20ms)"
+    # Opus コーデックは 20ms フレームを 10ms 単位に分割して配信することがある。
+    # mixer が FRAME_SAMPLES (960) を送出しても受信側は 480 サンプル (10ms) になりうる。
+    assert FRAME_SAMPLES % len(received_frame) == 0, (
+        f"フレームサイズが 20ms の整数分の1でない: {len(received_frame)} samples"
     )
