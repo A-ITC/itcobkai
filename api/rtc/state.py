@@ -7,7 +7,8 @@ from typing import Any, Final
 
 SAMPLE_RATE: Final = 48000
 NUM_CHANNELS: Final = 1
-SAMPLES_10MS: Final = 480  # 48000Hz * 0.01s
+FRAME_SAMPLES: Final = 960  # 48000Hz * 0.02s (20ms)
+FRAME_DURATION_S: Final = 0.02
 
 
 @dataclass
@@ -19,8 +20,10 @@ class UserSession:
     audio_queue: Queue[np.ndarray] = field(default_factory=Queue)
     # 直近の音声データを保持（ミキシング時にデータが足りない場合の補完用）
     last_frame: np.ndarray = field(
-        default_factory=lambda: np.zeros(SAMPLES_10MS, dtype=np.int16)
+        default_factory=lambda: np.zeros(FRAME_SAMPLES, dtype=np.int16)
     )
+    # ジッターバッファ: 2フレーム以上受信してからミキシングを開始する
+    primed: bool = False
 
 
 # グローバル管理

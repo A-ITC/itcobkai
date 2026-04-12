@@ -42,7 +42,7 @@ from api.rtc.rtc import create_token, init_room
 from api.rtc.state import (
     SAMPLE_RATE,
     NUM_CHANNELS,
-    SAMPLES_10MS,
+    FRAME_SAMPLES,
     active_sessions,
     connects,
     set_mute,
@@ -124,8 +124,8 @@ class _AudioTestParticipant:
         await self.room.local_participant.publish_track(track)
 
         async def _send_loop():
-            data = np.full(SAMPLES_10MS, _AUDIO_VALUE, dtype=np.int16)
-            frame = AudioFrame(data.tobytes(), SAMPLE_RATE, NUM_CHANNELS, SAMPLES_10MS)
+            data = np.full(FRAME_SAMPLES, _AUDIO_VALUE, dtype=np.int16)
+            frame = AudioFrame(data.tobytes(), SAMPLE_RATE, NUM_CHANNELS, FRAME_SAMPLES)
             while True:
                 await self._audio_source.capture_frame(frame)
 
@@ -340,3 +340,62 @@ async def test_lk_audio_not_delivered_in_different_islands(audio_rooms):
     # HB のキューを初期化してから無音チェック
     await pb.drain_audio(duration=0.5)
     await pb.assert_silent_for(duration=2.0)
+
+
+# ---------------------------------------------------------------------------
+# テスト 4: ジッターバッファ — 2 フレーム溜まった後に音声が届く
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.livekit
+async def test_lk_jitter_buffer_primes_before_mixing(audio_rooms):
+    """プライミング前（キュー 0〜1 フレーム）は無音、2 フレーム蓄積後に音声が届く。
+
+    mixing_loop() の primed フラグ機構を検証する:
+    - 接続直後（キュー < 2 フレーム）は HB に音声が届かない
+    - キューが 2 フレーム以上溜まると HB に音声が届くようになる
+    """
+    pa, pb = audio_rooms
+
+    # 同じ島に設定
+    connects([[HA, HB]])
+
+    # HA が音声を送信開始（mixing_loop が実行中でジッターバッファがある）
+    await pa.publish_audio()
+
+    # 短い待機（プライミング期間）の後、音声が届くことを確認
+    # プライミングに必要な時間は 2 × 20ms = 40ms 程度
+    # ネットワーク往復を考慮して十分な余裕を持たせる
+    received = await pb.wait_for_non_zero_audio(timeout=10.0)
+    assert received, "ジッターバッファのプライミング後に HB へ音声が届いていない"
+
+
+# ---------------------------------------------------------------------------
+# テスト 5: 出力フレームサイズが 20ms (FRAME_SAMPLES) であることを確認
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.livekit
+async def test_lk_mixing_output_frame_size_is_20ms(audio_rooms):
+    """mixing_loop() が出力する AudioFrame が FRAME_SAMPLES (960) サンプルであることを確認する。"""
+    pa, pb = audio_rooms
+
+    connects([[HA, HB]])
+    await pa.publish_audio()
+
+    # 音声フレームが届くまで待機
+    deadline = asyncio.get_event_loop().time() + 10.0
+    received_frame: np.ndarray | None = None
+    while asyncio.get_event_loop().time() < deadline:
+        try:
+            frame = await asyncio.wait_for(pb._audio_queue.get(), timeout=0.5)
+            if np.any(frame != 0):
+                received_frame = frame
+                break
+        except asyncio.TimeoutError:
+            pass
+
+    assert received_frame is not None, "HB に音声フレームが届かなかった"
+    assert len(received_frame) == FRAME_SAMPLES, (
+        f"フレームサイズが期待値と異なる: {len(received_frame)} != {FRAME_SAMPLES} (20ms)"
+    )

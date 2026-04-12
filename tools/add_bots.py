@@ -40,7 +40,8 @@ _NOTES_JP = ["ド", "レ", "ミ", "ファ", "ソ", "ラ", "シ"]
 
 SAMPLE_RATE: int = 48000
 NUM_CHANNELS: int = 1
-SAMPLES_10MS: int = 480  # 48000 Hz * 0.01 s
+FRAME_SAMPLES: int = 960  # 48000 Hz * 0.02 s (20ms)
+FRAME_DURATION_S: float = 0.02
 AMPLITUDE: int = 8000  # 方形波振幅（最大 32767、ミキシングでクリップしない程度）
 
 APP_NAME: str = "itcobkai"
@@ -171,23 +172,23 @@ class BotClient:
         return True
 
     async def _audio_loop(self):
-        """方形波を 10ms ごとに送信し続ける。"""
+        """20msごとに方形波を送信し続ける。絶対時刻ベースでドリフトを防ぐ。"""
         loop = asyncio.get_event_loop()
+        next_tick = loop.time()
         while True:
-            t_start = loop.time()
+            next_tick += FRAME_DURATION_S
 
-            t = np.arange(self._sample_offset, self._sample_offset + SAMPLES_10MS)
+            t = np.arange(self._sample_offset, self._sample_offset + FRAME_SAMPLES)
             period_samples = SAMPLE_RATE / self.frequency
             wave = np.where(
                 (t % period_samples) < period_samples / 2, AMPLITUDE, -AMPLITUDE
             ).astype(np.int16)
 
-            frame = AudioFrame(wave.tobytes(), SAMPLE_RATE, NUM_CHANNELS, SAMPLES_10MS)
+            frame = AudioFrame(wave.tobytes(), SAMPLE_RATE, NUM_CHANNELS, FRAME_SAMPLES)
             await self._audio_source.capture_frame(frame)
-            self._sample_offset += SAMPLES_10MS
+            self._sample_offset += FRAME_SAMPLES
 
-            elapsed = loop.time() - t_start
-            await asyncio.sleep(max(0.0, 0.01 - elapsed))
+            await asyncio.sleep(max(0.0, next_tick - loop.time()))
 
     async def _move_loop(self):
         """2〜5秒ごとにランダムに前後左右へ移動する。"""
@@ -205,7 +206,9 @@ class BotClient:
                 ):
                     self.x, self.y = nx, ny
                     await self._room.local_participant.publish_data(
-                        payload=json.dumps({"command": "move", "x": nx, "y": ny}).encode()
+                        payload=json.dumps(
+                            {"command": "move", "x": nx, "y": ny}
+                        ).encode()
                     )
                     break
 
@@ -229,10 +232,16 @@ async def _amain(args: argparse.Namespace):
     api_port: int = int(os.environ.get("API_PORT", "41022"))
 
     if not domain:
-        print("エラー: DOMAIN が設定されていません (.env を確認してください)", file=sys.stderr)
+        print(
+            "エラー: DOMAIN が設定されていません (.env を確認してください)",
+            file=sys.stderr,
+        )
         sys.exit(1)
     if not secret:
-        print("エラー: SECRET_KEY が設定されていません (.env を確認してください)", file=sys.stderr)
+        print(
+            "エラー: SECRET_KEY が設定されていません (.env を確認してください)",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # UserStore を通じてユーザーを取得（USERS_JSON を直接読まない）
@@ -241,12 +250,17 @@ async def _amain(args: argparse.Namespace):
     all_users = store.all()
 
     if not all_users:
-        print("エラー: ユーザーが見つかりません (data/users.json を確認してください)", file=sys.stderr)
+        print(
+            "エラー: ユーザーが見つかりません (data/users.json を確認してください)",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     count = min(args.count, len(all_users))
     if count < args.count:
-        print(f"警告: ユーザーが {len(all_users)} 人しかいないため {count} 人のボットを起動します")
+        print(
+            f"警告: ユーザーが {len(all_users)} 人しかいないため {count} 人のボットを起動します"
+        )
 
     selected = random.sample(all_users, count)
     base_url = f"http://127.0.0.1:{api_port}"
@@ -290,7 +304,9 @@ async def _amain(args: argparse.Namespace):
         pass
     finally:
         print("\n切断中...")
-        await asyncio.gather(*[b.disconnect() for b in connected], return_exceptions=True)
+        await asyncio.gather(
+            *[b.disconnect() for b in connected], return_exceptions=True
+        )
         print("完了")
 
 
