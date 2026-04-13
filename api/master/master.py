@@ -1,6 +1,6 @@
 from .mapper import mapper
 from ..rtc.state import set_mute, connects
-from .user import User, us
+from .user import User, UserUpdateInput, us
 
 from ..rtc.adapter import (
     GuestCommand,
@@ -27,11 +27,19 @@ async def _(h: str, message: dict):
                 connects(mapper.get_current_islands())
         case GuestCommand.UPDATE:
             try:
-                user = User.model_validate(message["user"])
-                assert h == user.h
+                validated = UserUpdateInput.model_validate(message["user"])
+                assert h == str(message["user"].get("h", ""))
                 pos = us.get(h)
-                if pos:
-                    user.x, user.y = pos.x, pos.y
+                user = User(
+                    h=h,
+                    name=validated.name,
+                    year=validated.year,
+                    groups=validated.groups,
+                    greeting=validated.greeting,
+                    avatar=pos.avatar if pos else "",
+                    x=pos.x if pos else 0,
+                    y=pos.y if pos else 0,
+                )
                 us.upsert(user)
                 await send_message_all(UpdatedCommand(user=user.model_dump()))
             except Exception:

@@ -84,13 +84,14 @@ async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:
     response = await client.get(url, headers=headers)
     body = response.json()
 
-    # Allowed Servers のパース (辞書内包表記)
-    allowed_servers: dict[str, str] = {
-        s_id: label
-        for item in DISCORD_ALLOWED_SERVERS.split(",")
-        if ":" in item
-        for label, s_id in [item.split(":", 1)]
-    }
+    allowed_servers: dict[str, str] = {}
+    if DISCORD_ALLOWED_SERVERS:
+        allowed_servers = {
+            s_id: label
+            for item in DISCORD_ALLOWED_SERVERS.split(",")
+            if ":" in item
+            for label, s_id in [item.split(":", 1)]
+        }
 
     server_names: list[str] = []
     if isinstance(body, list):

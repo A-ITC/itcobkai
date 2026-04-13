@@ -1,6 +1,7 @@
 import json
 
 from asyncio import create_task, get_event_loop, sleep
+from typing import cast
 from livekit.rtc import (
     AudioSource,
     DataPacket,
@@ -65,7 +66,7 @@ class _LkApi:
             self._loop = None
 
 
-lkapi: LiveKitAPI = _LkApi()
+lkapi: LiveKitAPI = cast(LiveKitAPI, _LkApi())
 
 
 def create_token(identity: str, room_name: str) -> str:

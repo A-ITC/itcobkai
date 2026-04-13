@@ -73,31 +73,3 @@ export class RTCClient {
     }
   }
 }
-
-export async function joinRoom(token: string, receiveData: (userId: string, payload: object) => void) {
-  const room = new Room({ adaptiveStream: true, dynacast: true });
-  await room.connect(`wss://${location.hostname}`, token);
-
-  await room.localParticipant.setMicrophoneEnabled(true);
-
-  room.on(
-    RoomEvent.TrackSubscribed,
-    (track: RemoteTrack, publication: RemoteTrackPublication, participant: RemoteParticipant) => {
-      if (track.kind === Track.Kind.Audio) {
-        const element = track.attach();
-        document.body.appendChild(element);
-        console.log(`Subscribed to audio from ${participant.identity}`);
-      }
-    }
-  );
-
-  room.on(
-    RoomEvent.DataReceived,
-    (payload: Uint8Array, participant?: RemoteParticipant, kind?: DataPacket_Kind, topic?: string) => {
-      const decoder = new TextDecoder();
-      const data = JSON.parse(decoder.decode(payload));
-      receiveData(participant ? participant.identity : "unknown", data);
-      console.log(`Message from ${participant?.identity}:`, data);
-    }
-  );
-}

@@ -33,10 +33,13 @@ def calculate_connections(
 
             is_connected = False
             if island1 > 0 and island1 == island2:
+                # 1. 同じ島にいる → 距離不問で接続
                 is_connected = True
-            elif not area[p1[1]][p1[0]] or not area[p2[1]][p2[0]]:
+            elif not area[p1[1]][p1[0]] and not area[p2[1]][p2[0]]:
+                # 2. 両方が島の外 → チェビシェフ距離1で接続
                 if abs(p1[0] - p2[0]) <= 1 and abs(p1[1] - p2[1]) <= 1:
                     is_connected = True
+            # 3. 片方が島の中、片方が島の外 → 接続しない
 
             if is_connected:
                 adj[u1].append(u2)

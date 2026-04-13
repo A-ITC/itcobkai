@@ -1,13 +1,9 @@
 from json import dumps, loads
 from time import time
-from dotenv import load_dotenv
 from typing import TypedDict
 from base64 import b64decode, b64encode
 from hashlib import sha256
-from fastapi import Depends, Header, APIRouter, HTTPException
-from asyncio import iscoroutine
-from inspect import signature
-from functools import wraps
+from fastapi import Header, HTTPException
 from urllib.parse import quote, unquote
 from ..utils.config import SECRET_KEY, TTL
 
@@ -38,10 +34,6 @@ def _create_hash(text: str) -> str:
     return b64encode(digest).decode("utf-8")
 
 
-router = APIRouter(prefix="/api")
-load_dotenv()
-
-
 async def auth(authorization: str = Header(None)) -> str:
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
@@ -53,14 +45,3 @@ async def auth(authorization: str = Header(None)) -> str:
     if time() - payload["iat"] > TTL:
         raise HTTPException(status_code=401, detail="Token expired")
     return payload["h"]
-
-
-def verify_token(func):
-    @wraps(func)
-    async def wrapper(*args, token: str = Depends(auth), **kwargs):
-        if "token" in signature(func).parameters:
-            kwargs["token"] = token
-        res = func(*args, **kwargs)
-        return await res if iscoroutine(res) else res
-
-    return wrapper

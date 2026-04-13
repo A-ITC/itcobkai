@@ -28,7 +28,10 @@ def _post(payload: dict) -> dict:
     req = Request(
         f"{_BASE_URL}/api/master",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "X-Secret-Key": _config.get("SECRET_KEY", ""),
+        },
         method="POST",
     )
     try:
@@ -101,7 +104,9 @@ def main():
 
     # newmap
     p_newmap = sub.add_parser("newmap", help="全ユーザーを新しいマップに移行させる")
-    p_newmap.add_argument("map_name", help="マップ名 (data/itcobkai.json に定義されているもの)")
+    p_newmap.add_argument(
+        "map_name", help="マップ名 (data/itcobkai.json に定義されているもの)"
+    )
     p_newmap.set_defaults(func=cmd_newmap)
 
     # users

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from ..rtc.rtc import create_token, init_room
 from ..master.user import us, User
 from api.api.master import MasterRequest, master_request
-from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME
+from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME, SECRET_KEY
 from fastapi.responses import JSONResponse, FileResponse
 from ..rtc.adapter import UpdatedCommand, send_message_others
 
@@ -88,7 +88,7 @@ async def discord_login(post: SessionRequest):
     response = JSONResponse(content={"ok": True})
     response.set_cookie(
         key="session",
-        value=encode({"h": user.h}),
+        value=encode({"h": user.h, "iat": int(time())}),
         httponly=True,
         samesite="strict",
         secure=True,
@@ -119,7 +119,11 @@ def get_root():
 def get_asset(filename: str):
     """JS/CSSファイルを返すエンドポイント"""
     headers = {"Cache-Control": "public, max-age=86400"}
-    if (file_path := Path("dist/assets") / filename).is_file():
+    base = Path("dist/assets").resolve()
+    file_path = (base / filename).resolve()
+    if not file_path.is_relative_to(base):
+        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+    if file_path.is_file():
         return FileResponse(str(file_path), headers=headers)
     return JSONResponse(content={"error": "File not found"}, status_code=404)
 
@@ -128,21 +132,29 @@ def get_asset(filename: str):
 def get_image(hash: str):
     """画像を返すエンドポイント"""
     headers = {"Cache-Control": "public, max-age=86400"}
-    if (file_path := Path(MAP_DIR) / f"{hash}.png").is_file():
-        return FileResponse(str(file_path), headers=headers)
-    if (file_path := Path(AVATAR_DIR) / f"{hash}.webp").is_file():
-        return FileResponse(str(file_path), headers=headers)
+    map_base = Path(MAP_DIR).resolve()
+    avatar_base = Path(AVATAR_DIR).resolve()
+    map_path = (map_base / f"{hash}.png").resolve()
+    avatar_path = (avatar_base / f"{hash}.webp").resolve()
+    if not (
+        map_path.is_relative_to(map_base) and avatar_path.is_relative_to(avatar_base)
+    ):
+        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+    if map_path.is_file():
+        return FileResponse(str(map_path), headers=headers)
+    if avatar_path.is_file():
+        return FileResponse(str(avatar_path), headers=headers)
     return JSONResponse(content={"error": "Image not found"}, status_code=404)
 
 
-def _check_localhost(request: Request):
-    host = request.client.host if request.client else None
-    if host not in ("127.0.0.1", "::1"):
+def _check_secret_key(request: Request):
+    key = request.headers.get("X-Secret-Key")
+    if not key or key != SECRET_KEY:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @router.post("/api/master")
 async def master_endpoint(request: Request, post: MasterRequest):
-    """管理者用エンドポイント（localhost からのみ実行可能）。"""
-    _check_localhost(request)
+    """管理者用エンドポイント（X-Secret-Key ヘッダーで認証）。"""
+    _check_secret_key(request)
     return await master_request(post)

@@ -34,7 +34,7 @@ from api.rtc.adapter import GuestCommand, HostCommand
 from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
 from api.rtc.state import active_sessions, connects
-from api.master.user import User, UserStore
+from api.master.user import User, UserStore, us
 from api.api.lifespan import _position_ticker
 from tests.conftest import make_test_user
 
@@ -135,8 +135,8 @@ async def two_participants(livekit_domain, mock_mapper):
     - 両ユーザーが接続し INIT を受け取った後に yield する
     """
     # UserStore に事前登録（on_join の JOIN ブロードキャストに必要）
-    UserStore._users[HA] = make_test_user(HA, "User A")
-    UserStore._users[HB] = make_test_user(HB, "User B")
+    us._users[HA] = make_test_user(HA, "User A")
+    us._users[HB] = make_test_user(HB, "User B")
 
     # ルーム+ボット初期化
     await init_room(HA)
@@ -177,7 +177,7 @@ async def two_participants(livekit_domain, mock_mapper):
 @pytest.mark.livekit
 async def test_lk_init_received_on_join(livekit_domain, mock_mapper):
     """ユーザーが参加すると HostCommand.INIT を受け取る"""
-    UserStore._users[HA] = make_test_user(HA)
+    us._users[HA] = make_test_user(HA)
 
     await init_room(HA)
     pa = _TestParticipant(HA)
@@ -204,8 +204,8 @@ async def test_lk_init_received_on_join(livekit_domain, mock_mapper):
 @pytest.mark.livekit
 async def test_lk_join_broadcast_when_new_user_connects(livekit_domain, mock_mapper):
     """新しいユーザーが参加すると既存ユーザーに HostCommand.JOIN がブロードキャストされる"""
-    UserStore._users[HA] = make_test_user(HA, "User A")
-    UserStore._users[HB] = make_test_user(HB, "User B")
+    us._users[HA] = make_test_user(HA, "User A")
+    us._users[HB] = make_test_user(HB, "User B")
 
     await init_room(HA)
     await init_room(HB)
@@ -358,8 +358,8 @@ async def test_lk_move_broadcasts_move_after_tick(two_participants):
 @pytest.mark.livekit
 async def test_lk_leave_broadcasts_to_remaining_users(livekit_domain, mock_mapper):
     """ユーザーが退出すると残りのユーザーに HostCommand.LEAVE がブロードキャストされる"""
-    UserStore._users[HA] = make_test_user(HA, "User A")
-    UserStore._users[HB] = make_test_user(HB, "User B")
+    us._users[HA] = make_test_user(HA, "User A")
+    us._users[HB] = make_test_user(HB, "User B")
 
     await init_room(HA)
     await init_room(HB)
@@ -404,8 +404,8 @@ async def test_lk_update_preserves_position_from_server(two_participants):
     pa, pb = two_participants
 
     # サーバー側の現在座標を取得
-    server_x = UserStore._users[HA].x if UserStore._users.get(HA) else 0
-    server_y = UserStore._users[HA].y if UserStore._users.get(HA) else 0
+    server_x = us._users[HA].x if us._users.get(HA) else 0
+    server_y = us._users[HA].y if us._users.get(HA) else 0
 
     # 異なる座標を含む UPDATE を送信
     await pa.send(

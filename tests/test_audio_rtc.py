@@ -47,7 +47,7 @@ from api.rtc.state import (
     connects,
     set_mute,
 )
-from api.master.user import UserStore
+from api.master.user import UserStore, us
 from api.utils.config import DOMAIN
 from tests.conftest import make_test_user
 
@@ -239,8 +239,8 @@ async def audio_rooms(livekit_domain, mock_mapper):
     - 両ユーザーが INIT を受け取るまで待機してから yield する
     - teardown で mixing_loop をキャンセルし全セッションをクリーンアップする
     """
-    UserStore._users[HA] = make_test_user(HA, "Audio User A")
-    UserStore._users[HB] = make_test_user(HB, "Audio User B")
+    us._users[HA] = make_test_user(HA, "Audio User A")
+    us._users[HB] = make_test_user(HB, "Audio User B")
 
     await init_room(HA)
     await init_room(HB)

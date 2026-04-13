@@ -21,6 +21,7 @@ export default defineConfig({
     target: "esnext",
     manifest: true
   },
-  base: `https://${env.DOMAIN}/${pathPrefix}`,
+  // base: `https://${env.DOMAIN}/${pathPrefix}`,
+  base: isBuild ? "/dist" : "/dev",
   plugins: [tailwindcss(), solidPlugin()]
 });

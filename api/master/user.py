@@ -1,3 +1,4 @@
+import asyncio
 from json import dump, load as json_load
 from typing import Literal
 from pydantic import BaseModel, Field
@@ -17,11 +18,42 @@ class User(BaseModel):
     y: int = 0
 
 
+class UserUpdateInput(BaseModel):
+    """GuestCommand.UPDATE のバリデーション用（WebSocket経由）"""
+
+    h: str = Field(..., max_length=40)
+    name: str = Field(..., min_length=1, max_length=40)
+    year: int = Field(..., ge=1, le=20)
+    groups: list[Literal["dtm", "cg", "prog", "mv", "3dcg"]]
+    greeting: str = Field("", max_length=400)
+
+
 class UserStore:
-    _users: dict[str, "User"] = {}
+    def __init__(self):
+        self._users: dict[str, "User"] = {}
+        self._save_task: "asyncio.Task | None" = None
 
     def upsert(self, user: "User"):
         self._users[user.h] = user
+        self._schedule_save()
+
+    def _schedule_save(self):
+        if self._save_task is None or self._save_task.done():
+            try:
+                loop = asyncio.get_running_loop()
+                self._save_task = loop.create_task(self._delayed_flush())
+            except RuntimeError:
+                self.flush()
+
+    async def _delayed_flush(self):
+        await asyncio.sleep(5)
+        self.flush()
+
+    def flush(self):
+        """積み上がった変更をすぐにファイルへ書き込む"""
+        if self._save_task and not self._save_task.done():
+            self._save_task.cancel()
+        self._save_task = None
         users = [u.model_dump(exclude={"x", "y"}) for u in self._users.values()]
         with open(USERS_JSON, "w") as f:
             dump(users, f, indent=2, ensure_ascii=False)

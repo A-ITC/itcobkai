@@ -17,6 +17,10 @@ def init_logger(name: str) -> Logger:
     lib_logger.setLevel(LOG_LEVEL)
     lib_logger.addHandler(sh)
 
+    main_logger = getLogger("__main__")
+    main_logger.setLevel(LOG_LEVEL)
+    main_logger.addHandler(sh)
+
     if LOG_DIR:
         # nameの値でログファイルを変える
         # 100kB毎にログローテーションする
@@ -25,9 +29,6 @@ def init_logger(name: str) -> Logger:
         fh = RotatingFileHandler(fd, maxBytes=100 * 1024)
         fh.setFormatter(formatter)
         lib_logger.addHandler(fh)
+        main_logger.addHandler(fh)
 
-    main_logger = getLogger("__main__")
-    main_logger.setLevel(LOG_LEVEL)
-    main_logger.addHandler(sh)
-    main_logger.addHandler(fh)
     return main_logger

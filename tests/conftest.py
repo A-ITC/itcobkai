@@ -22,11 +22,11 @@ from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
 import api.master.master  # noqa: F401 — @on_message/@on_join/@on_leave ハンドラーを登録
-from api.api.router import router, _check_localhost
+from api.api.router import router, _check_secret_key
 from api.api.auth import encode
 from api.rtc.rtc import lkapi
 from api.rtc.state import active_sessions, muted_users, connects
-from api.master.user import User, UserStore
+from api.master.user import User, UserStore, us
 from api.master.grid import MapRaw
 from api.master.mapper import mapper
 from api.utils.schema import MapMeta
@@ -48,13 +48,19 @@ def mock_users_json(tmp_path, monkeypatch):
 @pytest.fixture(autouse=True)
 def reset_state():
     """テスト間で共有グローバルステートをリセットする"""
-    UserStore._users.clear()
+    us._users.clear()
+    if us._save_task and not us._save_task.done():
+        us._save_task.cancel()
+    us._save_task = None
     active_sessions.clear()
     muted_users.clear()
     connects([])
     mapper.reset()
     yield
-    UserStore._users.clear()
+    us._users.clear()
+    if us._save_task and not us._save_task.done():
+        us._save_task.cancel()
+    us._save_task = None
     active_sessions.clear()
     muted_users.clear()
     connects([])
@@ -94,8 +100,8 @@ async def client(test_app):
 
 @pytest.fixture
 async def local_client(test_app, monkeypatch):
-    """localhost 認証をバイパスした master エンドポイント用クライアント"""
-    monkeypatch.setattr("api.api.router._check_localhost", lambda request: None)
+    """SECRET_KEY 認証をバイパスした master エンドポイント用クライアント"""
+    monkeypatch.setattr("api.api.router._check_secret_key", lambda request: None)
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
     ) as c:

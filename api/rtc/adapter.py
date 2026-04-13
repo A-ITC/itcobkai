@@ -1,4 +1,5 @@
 from enum import StrEnum, auto
+from asyncio import gather
 from pydantic import BaseModel, Field
 from .state import send_raw_message, active_sessions, handler
 from ..utils.schema import MapMeta, Move
@@ -83,14 +84,11 @@ async def send_message(h: str, payload: Command):
 
 
 async def send_message_all(payload: Command):
-    for h in list(active_sessions.keys()):
-        await send_message(h, payload)
+    await gather(*[send_message(h, payload) for h in list(active_sessions.keys())])
 
 
 async def send_message_others(sender_h: str, payload: Command):
-    for h in list(active_sessions.keys()):
-        if h != sender_h:
-            await send_message(h, payload)
+    await gather(*[send_message(h, payload) for h in list(active_sessions.keys()) if h != sender_h])
 
 
 # ---------------------------------------------------------------------------

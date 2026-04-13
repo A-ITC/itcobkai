@@ -19,7 +19,7 @@ from httpx import AsyncClient, ASGITransport
 from api.api.auth import encode
 from api.utils.config import APP_NAME
 from api.rtc.rtc import active_sessions
-from api.master.user import UserStore
+from api.master.user import UserStore, us
 from tests.conftest import make_test_user
 
 
@@ -118,10 +118,10 @@ class TestApiSession:
 
 
 class TestApiMaster:
-    async def test_non_localhost_check_raises_http_403(self, test_app):
-        """_check_localhost は非 localhost IP からのアクセスを 403 で拒否する"""
+    async def test_no_secret_key_raises_http_403(self, test_app):
+        """X-Secret-Key ヘッダーなしのアクセスは 403"""
         async with AsyncClient(
-            transport=ASGITransport(app=test_app, client=("192.168.1.100", 50000)),
+            transport=ASGITransport(app=test_app),
             base_url="http://test",
         ) as c:
             resp = await c.post(
@@ -129,16 +129,16 @@ class TestApiMaster:
             )
         assert resp.status_code == 403
 
-    async def test_non_localhost_none_client_raises_http_403(self):
-        """client が None の場合も 403"""
+    async def test_wrong_secret_key_raises_http_403(self):
+        """X-Secret-Key が不正の場合も 403"""
         from fastapi import HTTPException
-        from api.api.router import _check_localhost
+        from api.api.router import _check_secret_key
 
         mock_request = MagicMock()
-        mock_request.client = None
+        mock_request.headers = {"X-Secret-Key": "wrong-key"}
 
         with pytest.raises(HTTPException) as exc_info:
-            _check_localhost(mock_request)
+            _check_secret_key(mock_request)
         assert exc_info.value.status_code == 403
 
     async def test_alert_command(self, local_client):
@@ -204,7 +204,7 @@ class TestApiMaster:
         dummy = MagicMock()
         dummy.username = "user_abc"
         active_sessions["user_abc"] = dummy
-        UserStore._users["user_abc"] = make_test_user("user_abc", "Alice")
+        us._users["user_abc"] = make_test_user("user_abc", "Alice")
 
         resp = await local_client.post("/api/master", json={"command": "USERS"})
 
@@ -255,7 +255,7 @@ class TestApiUsersMe:
 
     async def test_get_me_returns_user(self, client, valid_auth_header):
         """有効なトークンがあれば自分のユーザー情報を返す"""
-        UserStore._users["testhash123"] = make_test_user("testhash123", "Alice")
+        us._users["testhash123"] = make_test_user("testhash123", "Alice")
         resp = await client.get("/api/users/@me", headers=valid_auth_header)
         assert resp.status_code == 200
         body = resp.json()
@@ -281,7 +281,7 @@ class TestApiUsersMe:
 
     async def test_post_me_updates_user(self, client, valid_auth_header):
         """正常なリクエストでユーザー情報が更新される"""
-        UserStore._users["testhash123"] = make_test_user("testhash123", "Old Name")
+        us._users["testhash123"] = make_test_user("testhash123", "Old Name")
 
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             resp = await client.post(
@@ -305,7 +305,7 @@ class TestApiUsersMe:
 
     async def test_post_me_persists_to_store(self, client, valid_auth_header):
         """POST 後に UserStore に変更が反映される"""
-        UserStore._users["testhash123"] = make_test_user("testhash123", "Old Name")
+        us._users["testhash123"] = make_test_user("testhash123", "Old Name")
 
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             await client.post(
@@ -314,7 +314,7 @@ class TestApiUsersMe:
                 json={"name": "Saved Name", "year": 2, "groups": [], "greeting": ""},
             )
 
-        stored = UserStore._users.get("testhash123")
+        stored = us._users.get("testhash123")
         assert stored is not None
         assert stored.name == "Saved Name"
 
@@ -322,7 +322,7 @@ class TestApiUsersMe:
         """POST でアバターが上書きされない"""
         user = make_test_user("testhash123", "Alice")
         user.avatar = "avatar_hash_abc"
-        UserStore._users["testhash123"] = user
+        us._users["testhash123"] = user
 
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             resp = await client.post(
@@ -337,7 +337,7 @@ class TestApiUsersMe:
         """POST 後に UPDATED が他ユーザーへブロードキャストされる"""
         from api.rtc.rtc import active_sessions
 
-        UserStore._users["testhash123"] = make_test_user("testhash123", "Alice")
+        us._users["testhash123"] = make_test_user("testhash123", "Alice")
 
         sent_messages: list[dict] = []
 
@@ -370,7 +370,7 @@ class TestApiUsersMe:
 
     async def test_post_me_empty_name_returns_422(self, client, valid_auth_header):
         """空の name は Pydantic バリデーションエラー (422)"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -380,7 +380,7 @@ class TestApiUsersMe:
 
     async def test_post_me_name_too_long_returns_422(self, client, valid_auth_header):
         """41文字の name は 422"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -390,7 +390,7 @@ class TestApiUsersMe:
 
     async def test_post_me_year_zero_returns_422(self, client, valid_auth_header):
         """year=0 は 422 (ge=1)"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -400,7 +400,7 @@ class TestApiUsersMe:
 
     async def test_post_me_year_21_returns_422(self, client, valid_auth_header):
         """year=21 は 422 (le=20)"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -410,7 +410,7 @@ class TestApiUsersMe:
 
     async def test_post_me_invalid_group_returns_422(self, client, valid_auth_header):
         """無効な group 値は 422"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -427,7 +427,7 @@ class TestApiUsersMe:
         self, client, valid_auth_header
     ):
         """401文字の greeting は 422"""
-        UserStore._users["testhash123"] = make_test_user("testhash123")
+        us._users["testhash123"] = make_test_user("testhash123")
         resp = await client.post(
             "/api/users/@me",
             headers=valid_auth_header,
@@ -449,7 +449,7 @@ class TestApiUsersH:
 
     async def test_get_user_returns_user(self, client, valid_auth_header):
         """有効なトークンと存在するユーザーなら情報を返す"""
-        UserStore._users["otherhash456"] = make_test_user("otherhash456", "Bob")
+        us._users["otherhash456"] = make_test_user("otherhash456", "Bob")
         resp = await client.get("/api/users/otherhash456", headers=valid_auth_header)
         assert resp.status_code == 200
         body = resp.json()
@@ -468,7 +468,7 @@ class TestApiUsersH:
         from api.master.user import us as user_store
 
         user = make_test_user("otherhash456", "Bob")
-        UserStore._users["otherhash456"] = user
+        us._users["otherhash456"] = user
         user_store.set_position("otherhash456", 10, 20)
 
         resp = await client.get("/api/users/otherhash456", headers=valid_auth_header)

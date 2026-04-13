@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 from api.rtc.adapter import GuestCommand, HostCommand, handler
 from api.rtc.state import active_sessions, muted_users
-from api.master.user import User, UserStore
+from api.master.user import User, UserStore, us
 from api.master.mapper import mapper
 from tests.conftest import make_test_user
 
@@ -95,7 +95,7 @@ class TestOnMessageUpdate:
                 },
             )
 
-        stored = UserStore._users.get(HA)
+        stored = us._users.get(HA)
         assert stored is not None
         assert stored.name == "New Name"
         assert stored.year == 3
@@ -107,9 +107,9 @@ class TestOnMessageUpdate:
         # サーバーが管理する座標を設定
         mock_mapper.new_user(HA)
         mock_mapper.move(HA, 2, 3)
-        UserStore._users[HA] = make_test_user(HA)
-        UserStore._users[HA].x = 2
-        UserStore._users[HA].y = 3
+        us._users[HA] = make_test_user(HA)
+        us._users[HA].x = 2
+        us._users[HA].y = 3
 
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             await on_message(
@@ -128,7 +128,7 @@ class TestOnMessageUpdate:
                 },
             )
 
-        stored = UserStore._users.get(HA)
+        stored = us._users.get(HA)
         assert stored.x == 2
         assert stored.y == 3
 
@@ -256,7 +256,7 @@ class TestOnJoin:
     async def test_join_spawns_user_in_mapper(self, mock_mapper):
         """on_join はマッパーにユーザーを登録してポジションを割り当てる"""
         _add_session(HA)
-        UserStore._users[HA] = make_test_user(HA)
+        us._users[HA] = make_test_user(HA)
 
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
             await on_join(HA)
@@ -277,7 +277,7 @@ class TestOnJoin:
         """on_join は参加ユーザー自身に HostCommand.INIT を送る"""
         _add_session(HA)
         _add_session(HB)
-        UserStore._users[HA] = make_test_user(HA)
+        us._users[HA] = make_test_user(HA)
 
         sent_messages: list[dict] = []
 
@@ -301,8 +301,8 @@ class TestOnJoin:
         """on_join は既存ユーザー全員に HostCommand.JOINED をブロードキャストする（参加者自身を除く）"""
         _add_session(HA)
         _add_session(HB)
-        UserStore._users[HA] = make_test_user(HA)
-        UserStore._users[HB] = make_test_user(HB)
+        us._users[HA] = make_test_user(HA)
+        us._users[HB] = make_test_user(HB)
 
         sent_messages: list[dict] = []
 

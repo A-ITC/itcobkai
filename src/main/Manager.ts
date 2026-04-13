@@ -28,8 +28,8 @@ export default class Manager {
   }
 
   public async start(canvas: HTMLCanvasElement, audio: HTMLAudioElement, lkToken: string) {
-    await this.rtc.init(lkToken, audio);
-    this.rtc.onDisconnect = () => this.onDisconnect();
+    // Controller と dataFrom を先に初期化する。rtc.init() 内の room.connect() が解決した
+    // 直後にサーバーから INIT が届くことがあり、dataFrom が未設定だと握りつぶされるため。
     this.mc.init(canvas, (data: GuestMessage) => {
       this.send(data);
     });
@@ -101,6 +101,9 @@ export default class Manager {
       }
       this.onUpdate(this.users);
     };
+
+    await this.rtc.init(lkToken, audio);
+    this.rtc.onDisconnect = () => this.onDisconnect();
   }
 
   private send(data: GuestMessage) {
