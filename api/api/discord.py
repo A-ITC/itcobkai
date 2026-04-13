@@ -1,17 +1,22 @@
 from httpx import AsyncClient
-from dataclasses import dataclass
-from ..master.user import User
-from ..utils.utils import id7
+from psutil import CONN_LISTEN, AccessDenied, NoSuchProcess, net_connections
+from pathlib import Path
 from asyncio import gather
 from hashlib import sha256
 from fastapi import HTTPException
+from contextlib import suppress
+from dataclasses import dataclass
+from urllib.parse import quote
+from ..master.user import User
+from ..utils.utils import id7
 from ..utils.config import (
     AVATAR_DIR,
+    DEV_PORT,
     DISCORD_ALLOWED_SERVERS,
     DISCORD_CLIENT_ID,
     DISCORD_CLIENT_SECRET,
+    DOMAIN,
 )
-from pathlib import Path
 
 
 @dataclass
@@ -22,9 +27,31 @@ class DiscordUserInfo:
     avatar: str | None
 
 
-async def discord(code: str | None = None, redirect: str | None = None) -> User:
-    if not code or not redirect:
-        raise HTTPException(400, "code and redirect are required")
+def _build_redirect_uri() -> str:
+    """DEV_PORTが実際にLISTEN状態にあるかを確認して開発環境(/dev)か本番環境(/dist)のリダイレクトURIを生成する。"""
+    if DEV_PORT:
+        with suppress(AccessDenied, NoSuchProcess):
+            for conn in net_connections():
+                if conn.status == CONN_LISTEN and conn.laddr.port == DEV_PORT:
+                    return f"https://{DOMAIN}/dev#/login"
+    return f"https://{DOMAIN}/dist#/login"
+
+
+def build_authorize_url() -> str:
+    redirect_uri = _build_redirect_uri()
+    return (
+        "https://discord.com/api/oauth2/authorize"
+        f"?client_id={DISCORD_CLIENT_ID}"
+        f"&redirect_uri={quote(redirect_uri, safe='')}"
+        "&response_type=code"
+        "&scope=identify"
+    )
+
+
+async def discord(code: str | None = None) -> User:
+    if not code:
+        raise HTTPException(400, "code is required")
+    redirect = _build_redirect_uri()
     async with AsyncClient() as client:
         try:
             access_token = await _auth_discord(client, code, redirect)

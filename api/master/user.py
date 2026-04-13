@@ -1,5 +1,6 @@
 import asyncio
 from json import dump, load as json_load
+from pathlib import Path
 from typing import Literal
 from pydantic import BaseModel, Field
 from ..utils.config import USERS_JSON
@@ -50,13 +51,16 @@ class UserStore:
         self.flush()
 
     def flush(self):
-        """積み上がった変更をすぐにファイルへ書き込む"""
+        """積み上がった変更をすぐにファイルへ書き込む（一時ファイル経由でアトミックに置換）"""
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
         self._save_task = None
         users = [u.model_dump(exclude={"x", "y"}) for u in self._users.values()]
-        with open(USERS_JSON, "w") as f:
+        target = Path(USERS_JSON)
+        tmp = target.with_suffix(".tmp")
+        with open(tmp, "w") as f:
             dump(users, f, indent=2, ensure_ascii=False)
+        tmp.replace(target)
 
     def get(self, h: str) -> "User | None":
         return self._users.get(h)

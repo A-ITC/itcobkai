@@ -4,7 +4,7 @@ from pathlib import Path
 from logging import getLogger
 from typing import Literal
 from fastapi import APIRouter, Depends, Request, HTTPException
-from .discord import discord
+from .discord import discord, build_authorize_url
 from pydantic import BaseModel, Field
 from ..rtc.rtc import create_token, init_room
 from ..master.user import us, User
@@ -78,12 +78,16 @@ async def update_me(body: UserUpdateRequest, h=Depends(auth)):
 
 class SessionRequest(BaseModel):
     code: str
-    redirect: str
+
+
+@router.get("/api/auth/authorize")
+async def authorize():
+    return {"url": build_authorize_url()}
 
 
 @router.post("/api/discord")
 async def discord_login(post: SessionRequest):
-    user = await discord(post.code, post.redirect)
+    user = await discord(post.code)
     us.upsert(user)
     response = JSONResponse(content={"ok": True})
     response.set_cookie(

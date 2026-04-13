@@ -21,7 +21,9 @@ from time import time
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
-import api.master.master  # noqa: F401 — @on_message/@on_join/@on_leave ハンドラーを登録
+from api.master.master import register
+
+register()  # @on_message/@on_join/@on_leave ハンドラーを登録（副作用インポートの代替）
 from api.api.router import router, _check_secret_key
 from api.api.auth import encode
 from api.rtc.rtc import lkapi

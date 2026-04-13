@@ -36,70 +36,74 @@ export default class Manager {
 
     this.rtc.dataFrom = async (data: HostMessage) => {
       console.log(data);
-      switch (data.command) {
-        case HostCommand.ALERT:
-          window.alert(data.text);
-          if (data.reload) location.reload();
-          break;
-        case HostCommand.JOINED:
-          this.users[data.user.h] = data.user;
-          this.mc.setUsers(this.users);
-          Toastify({ text: `${data.user.name} が参加しました`, duration: 3000 }).showToast();
-          break;
-        case HostCommand.MOVED:
-          for (const move of data.moves) {
-            if (!this.users[move.h]) {
-              await this.fetchUser(move.h);
-            }
-            if (this.users[move.h]) {
-              this.users[move.h].x = move.x;
-              this.users[move.h].y = move.y;
-            }
-            if (move.h === this.playerId) {
-              this.mc.jumpTo(move.x, move.y);
-            }
-          }
-          this.mc.setUsers(this.users);
-          break;
-        case HostCommand.UPDATED:
-          this.users[data.user.h] = data.user;
-          this.mc.setUsers(this.users);
-          break;
-        case HostCommand.LEFT: {
-          const leftName = this.users[data.h]?.name ?? data.h;
-          delete this.users[data.h];
-          this.mc.setUsers(this.users);
-          Toastify({ text: `${leftName} が退出しました`, duration: 3000 }).showToast();
-          break;
-        }
-        case HostCommand.MUTED:
-          if (!this.users[data.h]) {
-            await this.fetchUser(data.h);
-          }
-          if (this.users[data.h]) {
-            this.users[data.h].mute = data.mute;
+      try {
+        switch (data.command) {
+          case HostCommand.ALERT:
+            window.alert(data.text);
+            if (data.reload) location.reload();
+            break;
+          case HostCommand.JOINED:
+            this.users[data.user.h] = data.user;
             this.mc.setUsers(this.users);
+            Toastify({ text: `${data.user.name} が参加しました`, duration: 3000 }).showToast();
+            break;
+          case HostCommand.MOVED:
+            for (const move of data.moves) {
+              if (!this.users[move.h]) {
+                await this.fetchUser(move.h);
+              }
+              if (this.users[move.h]) {
+                this.users[move.h].x = move.x;
+                this.users[move.h].y = move.y;
+              }
+              if (move.h === this.playerId) {
+                this.mc.jumpTo(move.x, move.y);
+              }
+            }
+            this.mc.setUsers(this.users);
+            break;
+          case HostCommand.UPDATED:
+            this.users[data.user.h] = data.user;
+            this.mc.setUsers(this.users);
+            break;
+          case HostCommand.LEFT: {
+            const leftName = this.users[data.h]?.name ?? data.h;
+            delete this.users[data.h];
+            this.mc.setUsers(this.users);
+            Toastify({ text: `${leftName} が退出しました`, duration: 3000 }).showToast();
+            break;
           }
-          break;
-        case HostCommand.INIT: {
-          const usersMap: { [key: string]: User } = {};
-          for (const user of data.users) {
-            usersMap[user.h] = user;
+          case HostCommand.MUTED:
+            if (!this.users[data.h]) {
+              await this.fetchUser(data.h);
+            }
+            if (this.users[data.h]) {
+              this.users[data.h].mute = data.mute;
+              this.mc.setUsers(this.users);
+            }
+            break;
+          case HostCommand.INIT: {
+            const usersMap: { [key: string]: User } = {};
+            for (const user of data.users) {
+              usersMap[user.h] = user;
+            }
+            this.users = usersMap;
+            await this.mc.newMap(data.map);
+            this.mc.setUsers(this.users, this.playerId);
+            this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
+            break;
           }
-          this.users = usersMap;
-          await this.mc.newMap(data.map);
-          this.mc.setUsers(this.users, this.playerId);
-          this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
-          break;
+          case HostCommand.NEWMAP: {
+            await this.mc.newMap(data.map);
+            this.mc.setUsers(this.users, this.playerId);
+            this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
+            break;
+          }
         }
-        case HostCommand.NEWMAP: {
-          await this.mc.newMap(data.map);
-          this.mc.setUsers(this.users, this.playerId);
-          this.onUpdateMap(data.map.red.split(",").map(row => row.split("").map(c => c === "1")));
-          break;
-        }
+        this.onUpdate(this.users);
+      } catch (e) {
+        console.error("Error handling HostMessage:", data.command, e);
       }
-      this.onUpdate(this.users);
     };
 
     await this.rtc.init(lkToken, audio);
@@ -112,13 +116,18 @@ export default class Manager {
   }
 
   private async fetchUser(h: string): Promise<void> {
-    const user = await request("GET", `/users/${h}`);
-    if (user) {
-      this.users[h] = user;
+    try {
+      const user = await request("GET", `/users/${h}`);
+      if (user) {
+        this.users[h] = user;
+      }
+    } catch (e) {
+      console.error(`Failed to fetch user ${h}:`, e);
     }
   }
 
   public end() {
+    this.mc.destroy();
     this.rtc.end();
   }
 

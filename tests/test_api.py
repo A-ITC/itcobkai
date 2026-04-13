@@ -1,14 +1,4 @@
-"""
-FastAPI エンドポイントテスト
-
-対象エンドポイント:
-  GET  /api/token   — セッション Cookie を検証して JWT を返す
-  POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)
-  POST /api/discord — Discord OAuth2 コールバック
-  POST /api/master  — 管理コマンド (localhost 限定)
-  GET  /dist/assets/{filename}
-  GET  /dist/images/{hash}
-"""
+"""\nFastAPI エンドポイントテスト\n\n対象エンドポイント:\n  GET  /api/token   — セッション Cookie を検証して JWT を返す\n  POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)\n  GET  /api/auth/authorize — Discord OAuth 認証 URL を返す\n  POST /api/discord — Discord OAuth2 コールバック\n  POST /api/master  — 管理コマンド (localhost 限定)\n  GET  /dist/assets/{filename}\n  GET  /dist/images/{hash}\n"""
 
 import json
 import pytest
@@ -93,6 +83,24 @@ class TestApiInit:
 
 
 # ---------------------------------------------------------------------------
+# /api/auth/authorize
+# ---------------------------------------------------------------------------
+
+
+class TestApiAuthorize:
+    async def test_authorize_returns_discord_url(self, client):
+        """GET /api/auth/authorize が Discord OAuth URL を返す"""
+        resp = await client.get("/api/auth/authorize")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "url" in data
+        url = data["url"]
+        assert "discord.com/api/oauth2/authorize" in url
+        assert "response_type=code" in url
+        assert "scope=identify" in url
+
+
+# ---------------------------------------------------------------------------
 # /api/session (Discord OAuth2 コールバック)
 # ---------------------------------------------------------------------------
 
@@ -105,7 +113,7 @@ class TestApiSession:
         with patch("api.api.router.discord", new=AsyncMock(return_value=mock_user)):
             resp = await client.post(
                 "/api/discord",
-                json={"code": "dummycode", "redirect": "https://example.com/callback"},
+                json={"code": "dummycode"},
             )
 
         assert resp.status_code == 200

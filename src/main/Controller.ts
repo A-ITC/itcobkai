@@ -101,4 +101,8 @@ export default class Controller {
       this.refresh();
     }
   }
+
+  public destroy() {
+    delete ticker.move;
+  }
 }

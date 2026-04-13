@@ -37,8 +37,12 @@ export class RTCClient {
     this.room.on(
       RoomEvent.DataReceived,
       (payload: Uint8Array, _participant?: RemoteParticipant, _kind?: DataPacket_Kind, _topic?: string) => {
-        const data: HostMessage = JSON.parse(new TextDecoder().decode(payload));
-        this.dataFrom?.(data);
+        try {
+          const data: HostMessage = JSON.parse(new TextDecoder().decode(payload));
+          this.dataFrom?.(data)?.catch(e => console.error("dataFrom error:", e));
+        } catch (e) {
+          console.error("Failed to parse RTC data:", e);
+        }
       }
     );
 

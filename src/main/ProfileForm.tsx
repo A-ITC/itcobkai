@@ -56,8 +56,8 @@ export default function ProfileForm(props: Props) {
         greeting: greeting()
       });
       props.onSaved?.();
-    } catch {
-      window.alert("エラーが発生しました");
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "エラーが発生しました");
     } finally {
       setSubmitting(false);
     }

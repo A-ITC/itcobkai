@@ -106,7 +106,6 @@ async def _setup_bot_in_room(room_name: str, username: str):
     room = Room()
     source = AudioSource(SAMPLE_RATE, NUM_CHANNELS)
     session = UserSession(username=username, room=room, audio_source=source)
-    active_sessions[username] = session
 
     @room.on("track_subscribed")
     def on_track_subscribed(
@@ -134,8 +133,8 @@ async def _setup_bot_in_room(room_name: str, username: str):
 
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: RemoteParticipant):
-        if session := active_sessions.pop(participant.identity, None):
-            create_task(session.room.disconnect())
+        if s := active_sessions.pop(participant.identity, None):
+            create_task(s.room.disconnect())
         create_task(handler.on_leave(participant.identity))
 
     bot_token = create_token("python-bot", room_name)
@@ -144,3 +143,7 @@ async def _setup_bot_in_room(room_name: str, username: str):
     # ユーザ専用のBotのトラックを公開
     track = LocalAudioTrack.create_audio_track("bot-mix", source)
     await room.local_participant.publish_track(track)
+
+    # Botがルームへの参加とトラック公開を完了してからセッションを登録する
+    # （接続完了前に send_message が呼ばれても空振りになるよう invariant を保証する）
+    active_sessions[username] = session

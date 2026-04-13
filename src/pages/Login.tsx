@@ -4,7 +4,6 @@ import { onMount, Show } from "solid-js";
 export default function Login() {
   const params = new URLSearchParams(window.location.search);
   const code = params.get("code");
-  const redirect = `${location.origin}${location.pathname}#/login`;
 
   return (
     <div class="text-gray-200">
@@ -14,12 +13,9 @@ export default function Login() {
 
         <Show
           when={code}
-          fallback={<Discord redirect={redirect} />}
+          fallback={<Discord />}
         >
-          <PleaseWait
-            code={code!}
-            redirect={redirect}
-          />
+          <PleaseWait code={code!} />
         </Show>
 
         <div class="py-8 text-center text-base">
@@ -35,14 +31,13 @@ export default function Login() {
 // Discordの認証の処理を行う
 interface PleaseWaitProps {
   code: string;
-  redirect: string;
 }
 function PleaseWait(props: PleaseWaitProps) {
   async function code2token() {
     const res = await fetch("/api/discord", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: props.code, redirect: props.redirect })
+      body: JSON.stringify({ code: props.code })
     });
     const json = await res.json();
     if (res.status === 200) {
@@ -52,8 +47,8 @@ function PleaseWait(props: PleaseWaitProps) {
     } else {
       window.alert("認証中に予期せぬエラーが発生しました。");
     }
-    console.log(props.code, props.redirect);
-    window.history.replaceState({}, "", props.redirect);
+    console.log(props.code);
+    window.history.replaceState({}, "", location.pathname);
   }
 
   onMount(() => {
@@ -71,14 +66,11 @@ function PleaseWait(props: PleaseWaitProps) {
 }
 
 // Discordボタン
-function Discord(props: { redirect: string }) {
-  function onClick() {
-    location.href =
-      "https://discord.com/api/oauth2/authorize" +
-      `?client_id=${import.meta.env.VITE_DISCORD_CLIENT_ID}` +
-      `&redirect_uri=${encodeURIComponent(props.redirect)}` +
-      "&response_type=code" +
-      "&scope=identify";
+function Discord() {
+  async function onClick() {
+    const res = await fetch("/api/auth/authorize");
+    const data = await res.json();
+    location.href = data.url;
   }
 
   return (

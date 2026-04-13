@@ -48,7 +48,8 @@ export default async function request(method: Method, path: string, post: any = 
       location.href = `/${URI_PREFIX}#/login`;
       return;
     }
-    throw new Error(`HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.detail ?? `HTTP ${res.status}`);
   }
   const json = await res.json();
   return json;
@@ -80,6 +81,10 @@ setInterval(() => Object.values(tickerFuncs).forEach(f => f()), 1000);
 export const ticker = new Proxy(tickerFuncs, {
   set(target, key: string, value: () => void) {
     target[key] = value;
+    return true;
+  },
+  deleteProperty(target, key: string) {
+    delete target[key];
     return true;
   }
 });

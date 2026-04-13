@@ -34,6 +34,9 @@ export default function Main() {
     onCleanup(() => window.removeEventListener("resize", applySize));
   });
 
+  // コンポーネントのアンマウント時に RTC 接続を確実に切断する（ページ遷移/リロード対応）
+  onCleanup(() => manager.end());
+
   async function connectButton() {
     const res = await request("POST", "/init");
     if (res.error) {

@@ -25,6 +25,7 @@ class Mapper:
         self.user_positions: dict[str, Position] = {}
         self.last_connections: set[Connection] = set()
         self.last_moves: dict[str, Position] = {}
+        self._cached_islands: list[list[str]] = []
         self._meta: MapMeta | None = None
 
     def __bool__(self) -> bool:
@@ -52,6 +53,7 @@ class Mapper:
         self.user_positions = {}
         self.last_connections = set()
         self.last_moves = {}
+        self._cached_islands = []
         self._meta = replace(
             meta,
             width=self.width,
@@ -81,21 +83,31 @@ class Mapper:
         self.user_positions.pop(h, None)
         self.last_moves.pop(h, None)
 
-    def move(self, h: str, x: int, y: int):
+    def move(self, h: str, x: int, y: int) -> bool:
+        """ユーザーを(x, y)に移動する。位置が実際に変わった場合 True を返す。"""
         if 0 <= x < self.width and 0 <= y < self.height and not self.noentry[y][x]:
-            self.user_positions[h] = (x, y)
-            self.last_moves[h] = (x, y)
+            if self.user_positions.get(h) != (x, y):
+                self.user_positions[h] = (x, y)
+                self.last_moves[h] = (x, y)
+                return True
+        return False
 
     def get_map_meta(self) -> MapMeta:
         assert self._meta is not None, "MapMeta is not initialized"
         return self._meta
 
     def get_current_islands(self) -> list[list[str]]:
-        """現在のユーザー位置から島グループを計算して返す（last_connections は変更しない）"""
+        """現在のユーザー位置から島グループを計算して返す。
+        接続状態が変化していない場合はキャッシュを返し、計算コストを抑える。
+        """
         current_connections = calculate_connections(
             self.user_positions, self.island_ids, self.area
         )
-        return connections_to_islands(current_connections)
+        if current_connections == self.last_connections:
+            return self._cached_islands
+        self.last_connections = current_connections
+        self._cached_islands = connections_to_islands(current_connections)
+        return self._cached_islands
 
     def last_updated(self) -> LastUpdated:
         current_connections = calculate_connections(

@@ -35,7 +35,6 @@ from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
 from api.rtc.state import active_sessions, connects
 from api.master.user import User, UserStore, us
-from api.api.lifespan import _position_ticker
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -315,33 +314,22 @@ async def test_lk_mute_false_broadcasts_update_to_all(two_participants):
 
 
 @pytest.mark.livekit
-async def test_lk_move_broadcasts_move_after_tick(two_participants):
-    """GuestCommand.MOVE を送り、バックグラウンドタスクのポジションティッカーが発火すると
-    他のユーザーに HostCommand.MOVED がブロードキャストされる（送信者自身には配信しない）。"""
+async def test_lk_move_broadcasts_moved_immediately(two_participants):
+    """GuestCommand.MOVE を送ると即座に他のユーザーに HostCommand.MOVED がブロードキャストされる（イベント駆動）。
+    ポジションティッカーによる 1 秒待機は不要になった。"""
     pa, pb = two_participants
 
-    # バックグラウンドタスクでポジションティッカーを起動
-    ticker_task = asyncio.create_task(_position_ticker())
+    target_x, target_y = 2, 2
+    await pa.send(
+        {
+            "command": GuestCommand.MOVE,
+            "x": target_x,
+            "y": target_y,
+        }
+    )
 
-    try:
-        target_x, target_y = 2, 2
-        await pa.send(
-            {
-                "command": GuestCommand.MOVE,
-                "x": target_x,
-                "y": target_y,
-            }
-        )
-
-        # ティッカーが 1 秒待機後に MOVED をブロードキャストするのを待つ
-        # PB（他のユーザー）は HA の移動を受信する
-        msg_b = await pb.wait_for_command("MOVED", timeout=6.0)
-    finally:
-        ticker_task.cancel()
-        try:
-            await ticker_task
-        except asyncio.CancelledError:
-            pass
+    # イベント駆動のため即座にブロードキャストされる（タイムアウト内に受信できればOK）
+    msg_b = await pb.wait_for_command("MOVED", timeout=6.0)
 
     # PB が HA の移動を受信したことを確認
     ha_move_b = next((mv for mv in msg_b["moves"] if mv["h"] == HA), None)
