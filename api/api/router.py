@@ -1,17 +1,17 @@
 from time import time
 from .auth import auth, encode, decode
+from typing import Literal
 from pathlib import Path
 from logging import getLogger
-from typing import Literal
 from fastapi import APIRouter, Depends, Request, HTTPException
 from .discord import discord, build_authorize_url
 from pydantic import BaseModel, Field
 from ..rtc.rtc import create_token, init_room
+from ..rtc.adapter import UpdatedCommand, send_message_others
 from ..master.user import us, User
 from api.api.master import MasterRequest, master_request
-from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, APP_NAME, SECRET_KEY
+from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, SECRET_KEY
 from fastapi.responses import JSONResponse, FileResponse
-from ..rtc.adapter import UpdatedCommand, send_message_others
 
 router = APIRouter()
 

@@ -1,6 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
 import { User } from "../common/Schema";
 import { labelIslands, getPlayerConnections } from "./Connections";
+import { IMAGE_URL } from "../common/Common";
 
 interface VoicePanelProps {
   connected: boolean;
@@ -15,9 +16,7 @@ interface VoicePanelProps {
 export function VoicePanel(props: VoicePanelProps) {
   const islandIds = createMemo(() => labelIslands(props.area));
 
-  const sections = createMemo(() =>
-    getPlayerConnections(props.users, props.playerId, islandIds(), props.area)
-  );
+  const sections = createMemo(() => getPlayerConnections(props.users, props.playerId, islandIds(), props.area));
 
   return (
     <div class="w-full md:w-72 bg-gray-800/50 p-5 border-t md:border-t-0 md:border-l border-gray-700 flex flex-col shrink-0">
@@ -85,7 +84,7 @@ function UserItem(props: { user: User }) {
     <div class="flex items-center gap-3 py-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
       <div class="relative shrink-0">
         <img
-          src={`/dist/images/${props.user.avatar}`}
+          src={`${IMAGE_URL}/${props.user.avatar}`}
           alt="avatar"
           class="w-10 h-10 rounded-full border-2 border-gray-600 object-cover"
         />

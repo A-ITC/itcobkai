@@ -34,6 +34,7 @@ vi.mock("../../src/main/Manager", () => ({
 // Common モジュールを丸ごとモック（livekit-client などの巨大な依存を回避）
 vi.mock("../../src/common/Common", () => ({
   default: mockRequest,
+  IMAGE_URL: "/dist/images",
   storage: { outer: 13, inner: 2 },
   beep: vi.fn(),
   ticker: { move: vi.fn() }

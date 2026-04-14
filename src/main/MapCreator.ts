@@ -1,5 +1,5 @@
 import { Map, MapRaw, User } from "../common/Schema";
-import { loadImage, storage } from "../common/Common";
+import { IMAGE_URL, loadImage, storage } from "../common/Common";
 
 // Canvasにマップや人物を描画するクラス
 export default class MapCreater {
@@ -32,7 +32,7 @@ export default class MapCreater {
   public async preloadAvatars(users: User[]): Promise<void> {
     await Promise.all(
       users.map(async user => {
-        const avatarUrl = `/dist/images/${user.avatar}`;
+        const avatarUrl = `${IMAGE_URL}s/${user.avatar}`;
         if (!this.avatars[user.h] || !this.avatars[user.h].src.endsWith(avatarUrl)) {
           const img = new Image();
           await loadImage(avatarUrl, img);
@@ -63,8 +63,8 @@ export default class MapCreater {
       height: red.length
     };
     await Promise.all([
-      loadImage(`/dist/images/${mapraw.top}`, map.topImage),
-      loadImage(`/dist/images/${mapraw.bottom}`, map.bottomImage)
+      loadImage(`${IMAGE_URL}/${mapraw.top}`, map.topImage),
+      loadImage(`${IMAGE_URL}/${mapraw.bottom}`, map.bottomImage)
     ]);
     return map;
   }
@@ -81,7 +81,7 @@ export default class MapCreater {
 
   private drawUser(user: User, i: number, j: number) {
     const grid = this.canvas.width / storage.outer;
-    const avatarUrl = `/dist/images/${user.avatar}`;
+    const avatarUrl = `${IMAGE_URL}/${user.avatar}`;
     const avatar = this.avatars[user.h];
     if (!avatar || !avatar.src.endsWith(avatarUrl)) return; // 未キャッシュはスキップ（preloadAvatars済みなら発生しない）
     this.ctx.beginPath();

@@ -1,5 +1,5 @@
-const APP_NAME = import.meta.env.VITE_APP_NAME;
-export const URI_PREFIX = import.meta.env.PROD ? "itcobkai" : "dev";
+export const URI_PREFIX = import.meta.env.PROD ? "dist" : "dev";
+export const IMAGE_URL = "/dist/images";
 
 interface Storage {
   outer: number;
@@ -11,10 +11,10 @@ const defaultStorage: Storage = {
   inner: 5
 };
 
-export const storage = new Proxy(JSON.parse(localStorage.getItem(APP_NAME) ?? JSON.stringify(defaultStorage)), {
+export const storage = new Proxy(JSON.parse(localStorage.getItem("storage") ?? JSON.stringify(defaultStorage)), {
   set: (obj: { [x: string]: any }, prop: string, value: any) => {
     obj[prop] = value;
-    localStorage.setItem(APP_NAME, JSON.stringify(obj));
+    localStorage.setItem("storage", JSON.stringify(obj));
     return true;
   }
 }) as Storage;

@@ -28,8 +28,6 @@ services:
   #     context: .
   #     args:
   #       DOMAIN: ${DOMAIN}
-  #       VITE_DISCORD_CLIENT_ID: ${VITE_DISCORD_CLIENT_ID}
-  #       VITE_APP_NAME: ${VITE_APP_NAME:-itcobkai}
   #   container_name: app
   #   restart: unless-stopped
   #   env_file:

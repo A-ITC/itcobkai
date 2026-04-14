@@ -39,8 +39,11 @@ async def process_user_audio(session: UserSession, track: Track):
                 frame_data = buf[:FRAME_SAMPLES].copy()
                 buf = buf[FRAME_SAMPLES:]
                 # キューが溢れないよう古いものは捨てる（最大 200ms 分）
-                if session.audio_queue.qsize() >= _MAX_QUEUE_SIZE:
-                    await session.audio_queue.get()
+                while session.audio_queue.qsize() >= _MAX_QUEUE_SIZE:
+                    try:
+                        session.audio_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
                 await session.audio_queue.put(frame_data)
     except CancelledError:
         # シャットダウン時に FFI キュー購読を event loop が閉じる前に解除する

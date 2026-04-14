@@ -15,14 +15,14 @@ USERS_JSON = "data/users.json"
 MAPS_JSON = "data/maps.json"
 
 # Discord OAuth2関連
-DISCORD_CLIENT_ID = environ.get("VITE_DISCORD_CLIENT_ID")
-DISCORD_CLIENT_SECRET = environ.get("DISCORD_CLIENT_SECRET")
-DISCORD_ALLOWED_SERVERS = environ.get("DISCORD_ALLOWED_SERVERS")
+DISCORD_CLIENT_ID = environ["DISCORD_CLIENT_ID"]
+DISCORD_CLIENT_SECRET = environ["DISCORD_CLIENT_SECRET"]
+DISCORD_ALLOWED_SERVERS = environ["DISCORD_ALLOWED_SERVERS"]
 
 # アプリケーション関連
-SECRET_KEY = environ.get("SECRET_KEY")
+SECRET_KEY = environ["SECRET_KEY"]
 DEV_PORT = int(environ.get("DEV_PORT", 41021))
 API_PORT = int(environ.get("API_PORT", 41022))
 
 # LiveKit関連
-DOMAIN = environ.get("DOMAIN")
+DOMAIN = environ["DOMAIN"]
