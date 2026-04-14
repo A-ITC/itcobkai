@@ -1,8 +1,8 @@
+from .grid import MapRaw, Position, parse_grid, label_islands
 from random import choice
 from logging import getLogger
 from dataclasses import replace
 from ..utils.schema import MapMeta, Move
-from .grid import MapRaw, Position, parse_grid, label_islands
 from .connections import (
     Connection,
     LastUpdated,
@@ -28,36 +28,45 @@ class Mapper:
         self._cached_islands: list[list[str]] = []
         self._meta: MapMeta | None = None
 
-    def __bool__(self) -> bool:
-        return self.map_raw is not None
-
     def init(self, map_raw: MapRaw, meta: MapMeta):
-        """マップデータからマッパーを初期化する（NEWMAP 時にも呼び出し可能）"""
-        self.map_raw = map_raw
-
-        self.area = parse_grid(map_raw.red)
-        self.noentry = parse_grid(map_raw.black)
-        self.height = len(self.area)
-        self.width = len(self.area[0]) if self.height > 0 else 0
+        """マップデータからマッパーを初期化する（NEWMAP 時にも呼び出し可能）。
+        map_raw が不正（歩行可能エリアなし）の場合は ValueError を送出し、状態を変更しない。
+        """
+        area = parse_grid(map_raw.red)
+        noentry = parse_grid(map_raw.black)
+        height = len(area)
+        width = len(area[0]) if height > 0 else 0
 
         # 歩行可能エリアの事前計算
-        self.walkable_cells = []
-        for y in range(self.height):
-            for x in range(self.width):
-                if not self.noentry[y][x]:
-                    self.walkable_cells.append((x, y))
+        walkable_cells: list[Position] = []
+        for y in range(height):
+            for x in range(width):
+                if not noentry[y][x]:
+                    walkable_cells.append((x, y))
 
-        self.island_ids = label_islands(self.area, self.width, self.height)
+        if height == 0 or width == 0 or not walkable_cells:
+            raise ValueError(
+                f"マップデータが不正です: height={height}, width={width}, walkable={len(walkable_cells)}"
+            )
 
-        # 状態管理のリセット
+        island_ids = label_islands(area, width, height)
+
+        # バリデーション通過後にのみ状態を更新する（例外発生時は状態を汚染しない）
+        self.map_raw = map_raw
+        self.area = area
+        self.noentry = noentry
+        self.height = height
+        self.width = width
+        self.walkable_cells = walkable_cells
+        self.island_ids = island_ids
         self.user_positions = {}
         self.last_connections = set()
         self.last_moves = {}
         self._cached_islands = []
         self._meta = replace(
             meta,
-            width=self.width,
-            height=self.height,
+            width=width,
+            height=height,
             red=map_raw.red,
             black=map_raw.black,
         )

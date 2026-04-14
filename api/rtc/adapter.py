@@ -1,7 +1,8 @@
+from json import dumps
 from enum import StrEnum, auto
+from .state import send_raw_message, send_raw_message_bytes, active_sessions, handler
 from asyncio import gather
 from pydantic import BaseModel, Field
-from .state import send_raw_message, active_sessions, handler
 from ..utils.schema import MapMeta, Move
 
 
@@ -84,11 +85,21 @@ async def send_message(h: str, payload: Command):
 
 
 async def send_message_all(payload: Command):
-    await gather(*[send_message(h, payload) for h in list(active_sessions.keys())])
+    data = dumps(payload.model_dump()).encode("utf-8")
+    await gather(
+        *[send_raw_message_bytes(h, data) for h in list(active_sessions.keys())]
+    )
 
 
 async def send_message_others(sender_h: str, payload: Command):
-    await gather(*[send_message(h, payload) for h in list(active_sessions.keys()) if h != sender_h])
+    data = dumps(payload.model_dump()).encode("utf-8")
+    await gather(
+        *[
+            send_raw_message_bytes(h, data)
+            for h in list(active_sessions.keys())
+            if h != sender_h
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------

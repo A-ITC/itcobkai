@@ -32,8 +32,8 @@ export default class MapCreater {
   public async preloadAvatars(users: User[]): Promise<void> {
     await Promise.all(
       users.map(async user => {
-        const avatarUrl = `${IMAGE_URL}s/${user.avatar}`;
-        if (!this.avatars[user.h] || !this.avatars[user.h].src.endsWith(avatarUrl)) {
+        const avatarUrl = user.avatar ? `${IMAGE_URL}/${user.avatar}` : "";
+        if (!this.avatars[user.h] || (!!avatarUrl && !this.avatars[user.h].src.endsWith(avatarUrl))) {
           const img = new Image();
           await loadImage(avatarUrl, img);
           this.avatars[user.h] = img;
@@ -81,9 +81,9 @@ export default class MapCreater {
 
   private drawUser(user: User, i: number, j: number) {
     const grid = this.canvas.width / storage.outer;
-    const avatarUrl = `${IMAGE_URL}/${user.avatar}`;
+    const avatarUrl = user.avatar ? `${IMAGE_URL}/${user.avatar}` : "";
     const avatar = this.avatars[user.h];
-    if (!avatar || !avatar.src.endsWith(avatarUrl)) return; // 未キャッシュはスキップ（preloadAvatars済みなら発生しない）
+    if (!avatar || (!!avatarUrl && !avatar.src.endsWith(avatarUrl))) return; // 未キャッシュはスキップ（preloadAvatars済みなら発生しない）
     this.ctx.beginPath();
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
     this.ctx.save();

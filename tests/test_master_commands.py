@@ -8,6 +8,7 @@ send_message_all 呼び出し、Mapper 操作）を検証する。
 send_raw_message はモックするため LiveKit サーバー接続不要。
 """
 
+import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, call, patch
 
@@ -48,12 +49,6 @@ class TestOnMessageMove:
 
         assert mapper.user_positions.get(HA) == (3, 2)
 
-    async def test_move_without_mapper_is_noop(self):
-        """mapper が 初期化前の場合は何もしない（エラーなし）"""
-        # reset_state フィクスチャにより mapper.reset() 済み
-        await on_message(HA, {"command": GuestCommand.MOVE, "x": 1, "y": 1})
-        # 例外が起きなければ OK
-
     async def test_move_to_noentry_cell_is_ignored(self, mock_mapper):
         """noentry セルへの移動は無視される"""
         # black が全て 0 のため本テストではどこでも通るが、構造確認として
@@ -78,7 +73,7 @@ class TestOnMessageUpdate:
         _add_session(HA)
         mock_mapper.new_user(HA)
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_message(
                 HA,
                 {
@@ -111,7 +106,7 @@ class TestOnMessageUpdate:
         us._users[HA].x = 2
         us._users[HA].y = 3
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_message(
                 HA,
                 {
@@ -159,10 +154,10 @@ class TestOnMessageUpdate:
 
         sent_messages: list[dict] = []
 
-        async def capture(user: str, message: dict):
-            sent_messages.append({"to": user, "msg": message})
+        async def capture(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
 
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
             await on_message(
                 HA,
                 {
@@ -197,7 +192,7 @@ class TestOnMessageMute:
         """MUTE True はユーザーを muted_users に追加する"""
         _add_session(HA)
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_message(HA, {"command": GuestCommand.MUTE, "mute": True})
 
         assert HA in muted_users
@@ -207,7 +202,7 @@ class TestOnMessageMute:
         muted_users.add(HA)
         _add_session(HA)
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_message(HA, {"command": GuestCommand.MUTE, "mute": False})
 
         assert HA not in muted_users
@@ -219,10 +214,10 @@ class TestOnMessageMute:
 
         sent_messages: list[dict] = []
 
-        async def capture(user: str, message: dict):
-            sent_messages.append({"to": user, "msg": message})
+        async def capture(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
 
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
             await on_message(HA, {"command": GuestCommand.MUTE, "mute": True})
 
         sent_to = {m["to"] for m in sent_messages}
@@ -258,20 +253,14 @@ class TestOnJoin:
         _add_session(HA)
         us._users[HA] = make_test_user(HA)
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with (
+            patch("api.rtc.adapter.send_raw_message", new=AsyncMock()),
+            patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()),
+        ):
             await on_join(HA)
-
-        assert HA in mapper.user_positions
         pos = mapper.user_positions[HA]
         assert isinstance(pos, tuple)
         assert len(pos) == 2
-
-    async def test_join_without_mapper_is_noop(self):
-        """mapper が初期化前の場合は早期リターンしてエラーにならない"""
-        # reset_state フィクスチャにより mapper.reset() 済み
-        _add_session(HA)
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
-            await on_join(HA)
 
     async def test_join_sends_init_to_joining_user(self, mock_mapper):
         """on_join は参加ユーザー自身に HostCommand.INIT を送る"""
@@ -281,12 +270,14 @@ class TestOnJoin:
 
         sent_messages: list[dict] = []
 
-        async def capture(user: str, message: dict):
+        async def capture_raw(user: str, message: dict):
             sent_messages.append({"to": user, "msg": message})
 
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
+        with (
+            patch("api.rtc.adapter.send_raw_message", new=capture_raw),
+            patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()),
+        ):
             await on_join(HA)
-
         init_msgs = [m for m in sent_messages if m["msg"]["command"] == "INIT"]
         assert len(init_msgs) > 0
         assert any(m["to"] == HA for m in init_msgs), (
@@ -306,12 +297,14 @@ class TestOnJoin:
 
         sent_messages: list[dict] = []
 
-        async def capture(user: str, message: dict):
-            sent_messages.append({"to": user, "msg": message})
+        async def capture_bytes(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
 
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
+        with (
+            patch("api.rtc.adapter.send_raw_message", new=AsyncMock()),
+            patch("api.rtc.adapter.send_raw_message_bytes", new=capture_bytes),
+        ):
             await on_join(HA)
-
         join_msgs = [m for m in sent_messages if m["msg"]["command"] == "JOINED"]
         assert len(join_msgs) > 0
         # HB には JOINED が届く
@@ -335,17 +328,10 @@ class TestOnLeave:
         mock_mapper.new_user(HA)
         assert HA in mapper.user_positions
 
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_leave(HA)
 
         assert HA not in mapper.user_positions
-
-    async def test_leave_without_mapper_is_noop(self):
-        """mapper が初期化前の場合はエラーにならない"""
-        # reset_state フィクスチャにより mapper.reset() 済み
-        _add_session(HB)
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
-            await on_leave(HA)
 
     async def test_leave_broadcasts_leave_to_all_users(self, mock_mapper):
         """on_leave は HostCommand.LEFT を全ユーザーにブロードキャストする"""
@@ -354,10 +340,10 @@ class TestOnLeave:
 
         sent_messages: list[dict] = []
 
-        async def capture(user: str, message: dict):
-            sent_messages.append({"to": user, "msg": message})
+        async def capture(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
 
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
             await on_leave(HA)
 
         leave_msgs = [m for m in sent_messages if m["msg"]["command"] == "LEFT"]

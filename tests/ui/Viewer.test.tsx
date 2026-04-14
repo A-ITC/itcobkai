@@ -37,7 +37,8 @@ vi.mock("../../src/common/Common", () => ({
   IMAGE_URL: "/dist/images",
   storage: { outer: 13, inner: 2 },
   beep: vi.fn(),
-  ticker: { move: vi.fn() }
+  ticker: { move: vi.fn() },
+  createFallbackImage: vi.fn().mockReturnValue("data:fallback")
 }));
 
 // ──────────────────────────────────────────────────────────

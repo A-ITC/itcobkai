@@ -3,6 +3,7 @@ from psutil import CONN_LISTEN, AccessDenied, NoSuchProcess, net_connections
 from pathlib import Path
 from asyncio import gather
 from hashlib import sha256
+from logging import getLogger
 from fastapi import HTTPException
 from contextlib import suppress
 from dataclasses import dataclass
@@ -17,6 +18,9 @@ from ..utils.config import (
     DISCORD_CLIENT_SECRET,
     DOMAIN,
 )
+
+
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -133,10 +137,20 @@ async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:
     raise HTTPException(401, "server not allowed")
 
 
-async def _get_avatar_base64(client: AsyncClient, id: str, avatar: str) -> str:
+async def _get_avatar_base64(client: AsyncClient, id: str, avatar: str | None) -> str:
+    if not avatar:
+        logger.warning("[discord] user %s has no avatar set, skipping download", id)
+        return ""
     url = f"https://cdn.discordapp.com/avatars/{id}/{avatar}.webp"
     response = await client.get(url)
-    response.raise_for_status()
+    if response.is_error:
+        logger.warning(
+            "[discord] avatar fetch failed for user %s (HTTP %s %s), skipping",
+            id,
+            response.status_code,
+            url,
+        )
+        return ""
     content = response.content
     hash = sha256(content).hexdigest()
     avatar_dir = Path(AVATAR_DIR)

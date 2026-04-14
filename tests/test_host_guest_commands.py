@@ -35,6 +35,7 @@ from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
 from api.rtc.state import active_sessions, connects
 from api.master.user import User, UserStore, us
+from api.master.mapper import mapper
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -319,7 +320,10 @@ async def test_lk_move_broadcasts_moved_immediately(two_participants):
     ポジションティッカーによる 1 秒待機は不要になった。"""
     pa, pb = two_participants
 
-    target_x, target_y = 2, 2
+    # スポーン位置と必ず異なる座標を選ぶ（固定座標だとスポーン位置と重なり mapper.move が False を返す可能性がある）
+    current = mapper.user_positions.get(HA, (0, 0))
+    target_x = (current[0] + 1) % mapper.width
+    target_y = current[1]
     await pa.send(
         {
             "command": GuestCommand.MOVE,

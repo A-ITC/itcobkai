@@ -27,15 +27,19 @@ async def lifespan(app: FastAPI):
     with open(MAPS_JSON) as f:
         data = load(f)
     maps = data.get("maps", {})
-    if maps:
-        map_name, map_data = next(iter(maps.items()))
-        meta = MapMeta(
-            name=map_name,
-            top=map_data.get("top", ""),
-            bottom=map_data.get("bottom", ""),
+    if not maps:
+        raise RuntimeError(
+            "maps.json にマップが定義されていません。アプリを起動できません。"
         )
-        mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
-        logger.info(f"map initialized: {map_name}")
+    map_name, map_data = next(iter(maps.items()))
+    meta = MapMeta(
+        name=map_name,
+        top=map_data.get("top", ""),
+        bottom=map_data.get("bottom", ""),
+    )
+    # ValueError は伝播させてアプリ起動を失敗させる
+    mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
+    logger.info(f"map initialized: {map_name}")
     mixing_task = create_task(mixing_loop())
     yield
     logger.info("end lifespan")

@@ -1,7 +1,10 @@
+from .user import User, UserUpdateInput, us
+from logging import getLogger
 from .mapper import mapper
 from ..rtc.state import set_mute, connects
-from .user import User, UserUpdateInput, us
 from ..utils.schema import Move
+
+logger = getLogger(__name__)
 
 from ..rtc.adapter import (
     GuestCommand,
@@ -31,19 +34,18 @@ def register():
     async def _(h: str, message: dict):
         match message["command"]:
             case GuestCommand.MOVE:
-                if mapper:
-                    x, y = int(message["x"]), int(message["y"])
-                    # 位置が実際に変化した場合のみ接続を更新してブロードキャストする（キャッシュ効果）
-                    if mapper.move(h, x, y):
-                        connects(mapper.get_current_islands())
-                        await send_message_all(
-                            MovedCommand(moves=[Move(h=h, x=x, y=y)])
-                        )
+                x, y = int(message["x"]), int(message["y"])
+                logger.info(f"MOVE - {us.get_name(h)}: x={x}, y={y}")
+                # 位置が実際に変化した場合のみ接続を更新してブロードキャストする（キャッシュ効果）
+                if mapper.move(h, x, y):
+                    connects(mapper.get_current_islands())
+                    await send_message_all(MovedCommand(moves=[Move(h=h, x=x, y=y)]))
             case GuestCommand.UPDATE:
                 try:
                     validated = UserUpdateInput.model_validate(message["user"])
                     if h != str(message["user"].get("h", "")):
                         raise ValueError("Invalid user data")
+                    logger.info(f"UPDATE - {us.get_name(h)}")
                     pos = us.get(h)
                     user = User(
                         h=h,
@@ -61,6 +63,7 @@ def register():
                     raise ValueError("Invalid user data")
             case GuestCommand.MUTE:
                 muted = bool(message["mute"])
+                logger.info(f"MUTE - {us.get_name(h)}: mute={muted}")
                 set_mute(h, muted)
                 await send_message_others(h, MutedCommand(h=h, mute=muted))
             case _:
@@ -68,8 +71,6 @@ def register():
 
     @on_join
     async def _(h: str):
-        if not mapper:
-            return
         m = mapper
 
         move = m.new_user(h)
@@ -102,7 +103,6 @@ def register():
 
     @on_leave
     async def _(h: str):
-        if mapper:
-            mapper.remove_user(h)
-            connects(mapper.get_current_islands())
+        mapper.remove_user(h)
+        connects(mapper.get_current_islands())
         await send_message_all(LeftCommand(h=h))

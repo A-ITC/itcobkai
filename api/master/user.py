@@ -1,7 +1,7 @@
 import asyncio
-from json import dump, load as json_load
-from pathlib import Path
+from json import dump, load
 from typing import Literal
+from pathlib import Path
 from pydantic import BaseModel, Field
 from ..utils.config import USERS_JSON
 
@@ -65,6 +65,11 @@ class UserStore:
     def get(self, h: str) -> "User | None":
         return self._users.get(h)
 
+    def get_name(self, h: str) -> str:
+        """ユーザー名を返す。未登録の場合はハッシュをそのまま返す。"""
+        user = self._users.get(h)
+        return user.name if user else h
+
     def set_position(self, h: str, x: int, y: int):
         user = self._users.get(h)
         if user:
@@ -79,7 +84,7 @@ class UserStore:
         """data/users.json からユーザーデータを読み込む"""
         try:
             with open(USERS_JSON) as f:
-                users = json_load(f)
+                users = load(f)
             for u in users:
                 user = User.model_validate(u)
                 self._users[user.h] = user

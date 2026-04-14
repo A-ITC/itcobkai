@@ -1,7 +1,16 @@
-import json
-
-from asyncio import create_task, get_event_loop, sleep
+from json import JSONDecodeError, loads
+from .state import (
+    SAMPLE_RATE,
+    NUM_CHANNELS,
+    UserSession,
+    active_sessions,
+    audio_tasks,
+    handler,
+)
+from .mixer import process_user_audio
 from typing import cast
+from logging import getLogger
+from asyncio import create_task, get_event_loop, sleep
 from livekit.rtc import (
     AudioSource,
     DataPacket,
@@ -20,16 +29,10 @@ from livekit.api import (
     CreateRoomRequest,
     DeleteRoomRequest,
 )
+from ..master.user import us
 from ..utils.config import APP_NAME, DOMAIN, SECRET_KEY
-from .state import (
-    SAMPLE_RATE,
-    NUM_CHANNELS,
-    UserSession,
-    active_sessions,
-    audio_tasks,
-    handler,
-)
-from .mixer import process_user_audio
+
+logger = getLogger(__name__)
 
 
 class _LkApi:
@@ -121,18 +124,19 @@ async def _setup_bot_in_room(room_name: str, username: str):
     def on_data(data: DataPacket):
         if data.participant:
             try:
-                msg = json.loads(data.data.decode())
-                print(data.participant.identity, msg)
+                msg = loads(data.data.decode())
                 create_task(handler.on_message(data.participant.identity, msg))
-            except (json.JSONDecodeError, UnicodeDecodeError):
+            except (JSONDecodeError, UnicodeDecodeError):
                 pass
 
     @room.on("participant_connected")
     def on_participant_connected(participant: RemoteParticipant):
+        logger.info(f"JOIN - {us.get_name(participant.identity)}")
         create_task(handler.on_join(participant.identity))
 
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: RemoteParticipant):
+        logger.info(f"LEAVE - {us.get_name(participant.identity)}")
         if s := active_sessions.pop(participant.identity, None):
             create_task(s.room.disconnect())
         create_task(handler.on_leave(participant.identity))

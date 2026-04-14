@@ -1,6 +1,6 @@
+from .grid import Position
 from dataclasses import dataclass
 from ..utils.schema import Move
-from .grid import Position
 
 
 type Connection = tuple[str, str]

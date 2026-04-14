@@ -1,9 +1,8 @@
-import json
+from json import dumps
 import numpy as np
-
+from typing import Any, Final
 from asyncio import Queue
 from dataclasses import dataclass, field
-from typing import Any, Final
 
 SAMPLE_RATE: Final = 48000
 NUM_CHANNELS: Final = 1
@@ -58,5 +57,11 @@ def set_mute(h: str, muted: bool):
 async def send_raw_message(user: str, message: dict):
     if session := active_sessions.get(user):
         await session.room.local_participant.publish_data(
-            payload=json.dumps(message).encode("utf-8")
+            payload=dumps(message).encode("utf-8")
         )
+
+
+async def send_raw_message_bytes(user: str, data: bytes):
+    """あらかじめシリアライズ済みのバイト列を送信する（ブロードキャスト時に JSON 変換を 1 回に削減）"""
+    if session := active_sessions.get(user):
+        await session.room.local_participant.publish_data(payload=data)

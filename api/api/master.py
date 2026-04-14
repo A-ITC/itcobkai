@@ -46,20 +46,22 @@ async def master_request(post: MasterRequest):
             top=map_data.get("top", ""),
             bottom=map_data.get("bottom", ""),
         )
-        mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
-        if mapper:
-            moves: list[Move] = []
-            for session_h in list(active_sessions.keys()):
-                move = mapper.new_user(session_h)
-                us.set_position(session_h, move.x, move.y)
-                moves.append(move)
-            await send_message_all(NewmapCommand(map=mapper.get_map_meta()))
-            if moves:
-                # 自分自身の座標は送信しない（クライアント側の座標を優先）
-                for recipient_h in list(active_sessions.keys()):
-                    others = [mv for mv in moves if mv.h != recipient_h]
-                    if others:
-                        await send_message(recipient_h, MovedCommand(moves=others))
+        try:
+            mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
+        except ValueError as e:
+            return JSONResponse(content={"error": str(e)}, status_code=400)
+        moves: list[Move] = []
+        for session_h in list(active_sessions.keys()):
+            move = mapper.new_user(session_h)
+            us.set_position(session_h, move.x, move.y)
+            moves.append(move)
+        await send_message_all(NewmapCommand(map=mapper.get_map_meta()))
+        if moves:
+            # 自分自身の座標は送信しない（クライアント側の座標を優先）
+            for recipient_h in list(active_sessions.keys()):
+                others = [mv for mv in moves if mv.h != recipient_h]
+                if others:
+                    await send_message(recipient_h, MovedCommand(moves=others))
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:

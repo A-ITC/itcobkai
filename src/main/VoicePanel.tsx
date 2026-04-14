@@ -1,7 +1,7 @@
 import { createMemo, For, Show } from "solid-js";
 import { User } from "../common/Schema";
 import { labelIslands, getPlayerConnections } from "./Connections";
-import { IMAGE_URL } from "../common/Common";
+import { IMAGE_URL, createFallbackImage } from "../common/Common";
 
 interface VoicePanelProps {
   connected: boolean;
@@ -84,7 +84,10 @@ function UserItem(props: { user: User }) {
     <div class="flex items-center gap-3 py-3 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
       <div class="relative shrink-0">
         <img
-          src={`${IMAGE_URL}/${props.user.avatar}`}
+          src={props.user.avatar ? `${IMAGE_URL}/${props.user.avatar}` : createFallbackImage(40, 40)}
+          onError={e => {
+            (e.currentTarget as HTMLImageElement).src = createFallbackImage(40, 40);
+          }}
           alt="avatar"
           class="w-10 h-10 rounded-full border-2 border-gray-600 object-cover"
         />
