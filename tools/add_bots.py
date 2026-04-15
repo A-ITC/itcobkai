@@ -10,6 +10,7 @@ import json
 import os
 import random
 import sys
+import time
 from pathlib import Path
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -131,9 +132,6 @@ class BotClient:
         self._init_event.set()
 
     async def connect(self):
-        # --- 非同期負荷分散: 接続タイミングを 0~2秒 分散させる ---
-        await asyncio.sleep(random.uniform(0, 2.0))
-
         self._room.on("data_received", self._on_data)
         try:
             await self._room.connect(f"wss://{self._domain}", self._make_token())
@@ -228,8 +226,10 @@ async def _amain(args: argparse.Namespace):
     base_url = f"http://127.0.0.1:{api_port}"
 
     print(f"{count} 台のボットを初期化中...")
-    for user in selected:
+    for i, user in enumerate(selected):
         _post(base_url, {"command": "BOTINIT", "h": user.h}, secret)
+        if i < count - 1:
+            time.sleep(1)  # LiveKit の WebRTC ハンドシェイクが完了するまで待機
 
     bots = [
         BotClient(
@@ -242,9 +242,12 @@ async def _amain(args: argparse.Namespace):
         for i, u in enumerate(selected)
     ]
 
-    print("LiveKit に接続開始（ジッター分散あり）...")
-    results = await asyncio.gather(*[b.connect() for b in bots], return_exceptions=True)
-    connected = [b for b, r in zip(bots, results) if r is True]
+    print("LiveKit に接続開始（逐次接続）...")
+    connected: list[BotClient] = []
+    for b in bots:
+        result = await b.connect()
+        if result:
+            connected.append(b)
 
     if not connected:
         print("エラー: 接続失敗", file=sys.stderr)

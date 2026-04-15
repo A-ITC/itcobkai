@@ -148,14 +148,18 @@ export default class MapCreater {
 
   /** ウィンドウサイズから canvas の一辺サイズを計算し storage を更新して返す */
   public static updateStorage(): number {
-    const mobile = window.innerWidth < 768;
-    // 非モバイル: 外側 p-4(32px) + canvas 側 p-6(48px) + VoicePanel w-72(288px) = 368px
-    // モバイル  : 外側 p-4(32px) + canvas 側 p-6(48px)                           =  80px
-    const maxWidth = mobile ? window.innerWidth - 80 : window.innerWidth - 368;
-    // 非モバイル: 外側 p-4(32px) + canvas 側 p-6(48px) + ヘッダー(~48px) = 128px
-    const maxHeight = mobile ? window.innerHeight - 70 - 220 : window.innerHeight - 130;
+    const portrait = window.matchMedia("(orientation: portrait)").matches;
+    // Portrait : 外側 p-0(0px)  + canvas 側 p-6(48px)                           =  48px
+    // Landscape: 外側 p-4(32px) + canvas 側 p-6(48px) + VoicePanel w-72(288px) = 368px
+    const maxWidth = portrait ? window.innerWidth - 48 : window.innerWidth - 368;
+    // Portrait : 外側 p-0 + canvas 側 p-6(48px) + ヘッダー(~52px) + VoicePanel(~297px) = 397px
+    // Landscape: 外側 p-4(32px) + canvas 側 p-6(48px) + ヘッダー(~48px)                = 128px
+    const maxHeight = portrait ? window.innerHeight - 397 : window.innerHeight - 128;
     const size = Math.max(120, Math.min(maxWidth, maxHeight));
-    storage.outer = Math.max(8, Math.min(20, Math.round(size / 40)));
+    // Portrait: マス目を1段階大きく（outer を小さく = 1マスあたりのピクセルが大きくなる）
+    storage.outer = portrait
+      ? Math.max(4, Math.min(10, Math.round(size / 48)))
+      : Math.max(8, Math.min(20, Math.round(size / 40)));
     storage.inner = Math.max(1, Math.floor(storage.outer / 3));
     return size;
   }

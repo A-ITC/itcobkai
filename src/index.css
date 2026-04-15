@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+@variant portrait (@media (orientation: portrait));
+@variant landscape (@media (orientation: landscape));
+
 html {
-  @apply bg-gray-700;
+  @apply bg-gray-700 portrait:text-4xl;
+}
+
+body {
+  @apply landscape:overflow-hidden;
 }

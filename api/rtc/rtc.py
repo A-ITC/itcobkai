@@ -10,7 +10,14 @@ from .state import (
 from .mixer import process_user_audio
 from typing import cast
 from logging import getLogger
-from asyncio import create_task, get_event_loop, sleep
+from asyncio import (
+    Semaphore,
+    create_task,
+    get_event_loop,
+    sleep,
+    wait_for,
+    TimeoutError as AsyncTimeoutError,
+)
 from livekit.rtc import (
     AudioSource,
     DataPacket,
@@ -71,6 +78,9 @@ class _LkApi:
 
 lkapi: LiveKitAPI = cast(LiveKitAPI, _LkApi())
 
+# LiveKit への同時 WebRTC 接続数を制限する（多数の同時接続で FD/CPU が枯渇するのを防ぐ）
+_ROOM_INIT_SEM = Semaphore(4)
+
 
 def create_token(identity: str, room_name: str) -> str:
     token = (
@@ -91,17 +101,18 @@ async def init_room(name: str):
     注意: 30-40人規模のアプリのため、メッシュ型ではなくサーバ側でミキシングする構成にしている
         全員が1つの島に集まってしまう可能性があるので、subscribeを制御する方法は採用しない
     """
-    # 既存ルームを削除して完全にリセット（前回の接続状態が残らないようにする）
-    res = await lkapi.room.list_rooms(ListRoomsRequest(names=[name]))
-    if res.rooms:
-        await lkapi.room.delete_room(DeleteRoomRequest(room=name))
-        await sleep(0.5)
+    async with _ROOM_INIT_SEM:
+        # 既存ルームを削除して完全にリセット（前回の接続状態が残らないようにする）
+        res = await lkapi.room.list_rooms(ListRoomsRequest(names=[name]))
+        if res.rooms:
+            await lkapi.room.delete_room(DeleteRoomRequest(room=name))
+            await sleep(0.5)
 
-    # ルーム作成
-    await lkapi.room.create_room(CreateRoomRequest(name=name))
+        # ルーム作成
+        await lkapi.room.create_room(CreateRoomRequest(name=name))
 
-    # ボットがルームに接続完了してから返す（ユーザー接続前にボットが確実に存在するようにする）
-    await _setup_bot_in_room(name, name)
+        # ボットがルームに接続完了してから返す（ユーザー接続前にボットが確実に存在するようにする）
+        await _setup_bot_in_room(name, name)
     return {"token": create_token(name, name)}
 
 
@@ -142,7 +153,11 @@ async def _setup_bot_in_room(room_name: str, username: str):
         create_task(handler.on_leave(participant.identity))
 
     bot_token = create_token("python-bot", room_name)
-    await room.connect(f"wss://{DOMAIN}", bot_token)
+    try:
+        await wait_for(room.connect(f"wss://{DOMAIN}", bot_token), timeout=30.0)
+    except AsyncTimeoutError:
+        logger.error(f"Bot connection timed out for room {room_name}")
+        raise
 
     # ユーザ専用のBotのトラックを公開
     track = LocalAudioTrack.create_audio_track("bot-mix", source)

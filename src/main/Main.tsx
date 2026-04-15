@@ -14,6 +14,7 @@ export default function Main() {
   const [playerId, setPlayerId] = createSignal<string>("");
   const [area, setArea] = createSignal<boolean[][]>([]);
   const [tab, setTab] = createSignal<Tab>("map");
+  const mq = window.matchMedia("(orientation: portrait)");
   const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
@@ -29,9 +30,16 @@ export default function Main() {
       }
       manager.onResize();
     };
+    const handleOrientation = (e: MediaQueryListEvent) => {
+      applySize();
+    };
+    mq.addEventListener("change", handleOrientation);
     applySize();
     window.addEventListener("resize", applySize);
-    onCleanup(() => window.removeEventListener("resize", applySize));
+    onCleanup(() => {
+      mq.removeEventListener("change", handleOrientation);
+      window.removeEventListener("resize", applySize);
+    });
   });
 
   // コンポーネントのアンマウント時に RTC 接続を確実に切断する（ページ遷移/リロード対応）
@@ -71,9 +79,9 @@ export default function Main() {
   };
 
   return (
-    <div class="bg-gray-800 text-gray-200 min-h-screen flex items-center justify-center p-4">
-      {/* メインコンテナ: モバイルは縦並び、md以上は横並び */}
-      <div class="flex flex-col md:flex-row bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700 max-w-full">
+    <div class="bg-gray-800 text-gray-200 min-h-screen flex landscape:items-center justify-center p-4 portrait:p-2">
+      {/* メインコンテナ: portrait=縦並び landscape=横並び */}
+      <div class="flex flex-row portrait:flex-col bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700 max-w-full portrait:w-full">
         {/* 左側: メインエリア (Header + Canvas) */}
         <div class="p-6 flex flex-col items-center">
           <div class="w-full">
@@ -128,10 +136,10 @@ function HeaderBar(props: { tab: Tab; onTabChange: (t: Tab) => void }) {
   return (
     <div class="flex items-center justify-between mb-4 w-full">
       <div class="flex items-center gap-3">
-        <div class="text-2xl font-bold text-white tracking-tight">ITCOBKAI</div>
-        <div class="flex rounded overflow-hidden border border-gray-600 text-sm">
+        <div class="text-2xl portrait:text-4xl font-bold text-white tracking-tight">ITCOBKAI</div>
+        <div class="flex rounded overflow-hidden border border-gray-600 text-sm portrait:text-base">
           <button
-            class={`px-2 transition-colors ${
+            class={`px-2 portrait:px-3 transition-colors ${
               props.tab === "map" ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
             }`}
             onClick={() => props.onTabChange("map")}
@@ -139,7 +147,7 @@ function HeaderBar(props: { tab: Tab; onTabChange: (t: Tab) => void }) {
             MAP
           </button>
           <button
-            class={`px-2 transition-colors ${
+            class={`px-2 portrait:px-3 transition-colors ${
               props.tab === "edit" ? "bg-gray-700 text-white" : "bg-gray-900 text-gray-300 hover:bg-gray-700"
             }`}
             onClick={() => props.onTabChange("edit")}
