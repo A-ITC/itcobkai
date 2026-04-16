@@ -1,6 +1,6 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { VoicePanel } from "./VoicePanel";
-import MapCreater from "./MapCreator";
+import MapCreator from "./MapCreator";
 import ProfileForm from "./ProfileForm";
 import { User } from "../common/Schema";
 import request from "../common/Common";
@@ -24,7 +24,7 @@ export default function Main() {
     console.log("App mounted");
     // DOM に canvas がある状態で初期サイズを確定させる
     const applySize = () => {
-      const size = MapCreater.updateStorage();
+      const size = MapCreator.updateStorage();
       if (canvasRef) {
         canvasRef.width = size;
         canvasRef.height = size;

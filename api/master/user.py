@@ -82,14 +82,11 @@ class UserStore:
 
     def load(self):
         """data/users.json からユーザーデータを読み込む"""
-        try:
-            with open(USERS_JSON) as f:
-                users = load(f)
-            for u in users:
-                user = User.model_validate(u)
-                self._users[user.h] = user
-        except (FileNotFoundError, ValueError):
-            pass
+        with open(USERS_JSON) as f:
+            users = load(f)
+        for u in users:
+            user = User.model_validate(u)
+            self._users[user.h] = user
 
 
 us = UserStore()

@@ -140,13 +140,9 @@ def get_image(hash: str):
     avatar_base = Path(AVATAR_DIR).resolve()
     map_path = (map_base / f"{hash}.png").resolve()
     avatar_path = (avatar_base / f"{hash}.webp").resolve()
-    if not (
-        map_path.is_relative_to(map_base) and avatar_path.is_relative_to(avatar_base)
-    ):
-        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
-    if map_path.is_file():
+    if map_path.is_file() and map_path.is_relative_to(map_base):
         return FileResponse(str(map_path), headers=headers)
-    if avatar_path.is_file():
+    if avatar_path.is_file() and avatar_path.is_relative_to(avatar_base):
         return FileResponse(str(avatar_path), headers=headers)
     return JSONResponse(content={"error": "Image not found"}, status_code=404)
 

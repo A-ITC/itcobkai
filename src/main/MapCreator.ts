@@ -2,7 +2,7 @@ import { Map, MapRaw, User } from "../common/Schema";
 import { IMAGE_URL, loadImage, storage } from "../common/Common";
 
 // Canvasにマップや人物を描画するクラス
-export default class MapCreater {
+export default class MapCreator {
   private canvas = document.createElement("canvas");
   private ctx: CanvasRenderingContext2D;
   public map: Map = { area: [], noentry: [], topImage: new Image(), bottomImage: new Image(), width: 0, height: 0 };
@@ -11,7 +11,7 @@ export default class MapCreater {
   constructor() {
     this.ctx = this.canvas.getContext("2d")!;
     // コンストラクタ時点では this.canvas はダミー要素のため storage だけ更新する
-    MapCreater.updateStorage();
+    MapCreator.updateStorage();
   }
 
   /** canvas を差し替える（init 直後に canvasRef をセットするために使用） */
@@ -130,14 +130,14 @@ export default class MapCreater {
   private drawGrid() {
     this.ctx.strokeStyle = "rgba(200,200,200,0.2)";
     let grid = this.canvas.width / storage.outer;
-    for (var i = 0; i <= this.canvas.height / grid; ++i) {
+    for (let i = 0; i <= this.canvas.height / grid; ++i) {
       this.ctx.beginPath();
       this.ctx.moveTo(0, grid * i);
       this.ctx.lineTo(this.canvas.width, grid * i);
       this.ctx.closePath();
       this.ctx.stroke();
     }
-    for (var i = 0; i <= this.canvas.width / grid; ++i) {
+    for (let i = 0; i <= this.canvas.width / grid; ++i) {
       this.ctx.beginPath();
       this.ctx.moveTo(grid * i, 0);
       this.ctx.lineTo(grid * i, this.canvas.height);
@@ -165,7 +165,7 @@ export default class MapCreater {
   }
 
   public resize() {
-    const size = MapCreater.updateStorage();
+    const size = MapCreator.updateStorage();
     if (this.canvas.width !== size) this.canvas.width = size;
     if (this.canvas.height !== size) this.canvas.height = size;
   }

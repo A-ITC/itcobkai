@@ -1,4 +1,3 @@
-from json import load
 from logging import getLogger
 from pydantic import BaseModel
 from ..rtc.rtc import lkapi, init_room
@@ -12,10 +11,8 @@ from ..rtc.adapter import (
     send_message,
     send_message_all,
 )
-from ..master.grid import MapRaw
-from ..utils.config import MAPS_JSON
-from ..utils.schema import MapMeta, Move
-from ..master.mapper import mapper
+from ..utils.schema import Move
+from ..master.mapper import mapper, load_map_by_name
 from fastapi.responses import JSONResponse
 
 logger = getLogger(__name__)
@@ -36,18 +33,12 @@ async def master_request(post: MasterRequest):
         return {"ok": True}
 
     if post.command == "NEWMAP" and post.map:
-        with open(MAPS_JSON) as f:
-            data = load(f)
-        map_data = data.get("maps", {}).get(post.map)
-        if not map_data:
-            return JSONResponse(content={"error": "Map not found"}, status_code=404)
-        meta = MapMeta(
-            name=post.map,
-            top=map_data.get("top", ""),
-            bottom=map_data.get("bottom", ""),
-        )
         try:
-            mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
+            meta, raw = load_map_by_name(post.map)
+        except KeyError:
+            return JSONResponse(content={"error": "Map not found"}, status_code=404)
+        try:
+            mapper.init(raw, meta)
         except ValueError as e:
             return JSONResponse(content={"error": str(e)}, status_code=400)
         moves: list[Move] = []

@@ -2,7 +2,9 @@ from .grid import MapRaw, Position, parse_grid, label_islands
 from random import choice
 from logging import getLogger
 from dataclasses import replace
+from json import load
 from ..utils.schema import MapMeta, Move
+from ..utils.config import MAPS_JSON
 from .connections import (
     Connection,
     LastUpdated,
@@ -11,6 +13,46 @@ from .connections import (
 )
 
 logger = getLogger(__name__)
+
+
+def load_map_by_name(name: str) -> tuple[MapMeta, MapRaw]:
+    """maps.json から指定名のマップを読み込んで (MapMeta, MapRaw) を返す。
+    マップが見つからない場合は KeyError を送出する。
+    """
+    with open(MAPS_JSON) as f:
+        data = load(f)
+    maps = data.get("maps", {})
+    if name not in maps:
+        raise KeyError(f"Map '{name}' not found in maps.json")
+    map_data = maps[name]
+    meta = MapMeta(
+        name=name,
+        top=map_data.get("top", ""),
+        bottom=map_data.get("bottom", ""),
+    )
+    raw = MapRaw(red=map_data["red"], black=map_data["black"])
+    return meta, raw
+
+
+def load_first_map() -> tuple[str, MapMeta, MapRaw]:
+    """maps.json の先頭マップを読み込んで (name, MapMeta, MapRaw) を返す。
+    マップが1件も定義されていない場合は RuntimeError を送出する。
+    """
+    with open(MAPS_JSON) as f:
+        data = load(f)
+    maps = data.get("maps", {})
+    if not maps:
+        raise RuntimeError(
+            "maps.json にマップが定義されていません。アプリを起動できません。"
+        )
+    map_name, map_data = next(iter(maps.items()))
+    meta = MapMeta(
+        name=map_name,
+        top=map_data.get("top", ""),
+        bottom=map_data.get("bottom", ""),
+    )
+    raw = MapRaw(red=map_data["red"], black=map_data["black"])
+    return map_name, meta, raw
 
 
 class Mapper:

@@ -1,4 +1,3 @@
-from json import load
 from logging import getLogger
 from asyncio import create_task, gather
 from fastapi import FastAPI
@@ -7,11 +6,8 @@ from contextlib import asynccontextmanager
 from ..rtc.mixer import mixing_loop
 from ..rtc.state import active_sessions, audio_tasks
 from ..master.user import us
-from ..master.grid import MapRaw
-from ..utils.schema import MapMeta
-from ..utils.config import MAPS_JSON
 from ..utils.logger import init_logger
-from ..master.mapper import mapper
+from ..master.mapper import mapper, load_first_map
 from ..master.master import register
 
 logger = getLogger(__name__)
@@ -24,21 +20,9 @@ async def lifespan(app: FastAPI):
     register()
     logger.info("start lifespan")
     us.load()
-    with open(MAPS_JSON) as f:
-        data = load(f)
-    maps = data.get("maps", {})
-    if not maps:
-        raise RuntimeError(
-            "maps.json にマップが定義されていません。アプリを起動できません。"
-        )
-    map_name, map_data = next(iter(maps.items()))
-    meta = MapMeta(
-        name=map_name,
-        top=map_data.get("top", ""),
-        bottom=map_data.get("bottom", ""),
-    )
+    map_name, meta, raw = load_first_map()
     # ValueError は伝播させてアプリ起動を失敗させる
-    mapper.init(MapRaw(red=map_data["red"], black=map_data["black"]), meta)
+    mapper.init(raw, meta)
     logger.info(f"map initialized: {map_name}")
     mixing_task = create_task(mixing_loop())
     yield

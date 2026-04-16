@@ -1,5 +1,6 @@
 import asyncio
 import numpy as np
+from logging import getLogger
 from .state import (
     SAMPLE_RATE,
     NUM_CHANNELS,
@@ -13,6 +14,8 @@ from .state import (
 )
 from asyncio import CancelledError, current_task, get_event_loop, sleep
 from livekit.rtc import AudioFrame, AudioStream, Track
+
+logger = getLogger(__name__)
 
 # キューの最大積算フレーム数（20ms × 10 = 200ms 分を上限とする）
 _MAX_QUEUE_SIZE = 10
@@ -120,7 +123,7 @@ async def mixing_loop():
                     session.last_frame = await session.audio_queue.get()
                 # キューが空の場合は last_frame を維持（ゼロ埋めしない）
             except Exception:
-                pass
+                logger.exception("mixing_loop: failed to read audio queue")
 
         # 島ごとのミキシング（capture_frame ごとの coroutine を収集して並列実行）
         capture_coros = []
@@ -175,7 +178,12 @@ async def mixing_loop():
 
         # 全ユーザーへの送信を並列実行（逐次 await を排除）
         if capture_coros:
-            await asyncio.gather(*capture_coros)
+            results = await asyncio.gather(*capture_coros, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.exception(
+                        "mixing_loop: capture_frame failed", exc_info=result
+                    )
 
         # 絶対時刻ベースで 20ms 間隔を維持（ドリフト防止）
         await sleep(max(0.0, next_tick - loop.time()))

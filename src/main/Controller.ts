@@ -1,13 +1,13 @@
-import { GuestCommand, MapRaw, User } from "../common/Schema";
+import { GuestCommand, GuestMessage, MapRaw, User } from "../common/Schema";
 import { ticker } from "../common/Common";
-import MapCreater from "./MapCreator";
+import MapCreator from "./MapCreator";
 import Cropper from "./Cropper";
 
 export default class Controller {
   public canvas: HTMLCanvasElement = document.createElement("canvas");
-  private mc = new MapCreater();
+  private mc = new MapCreator();
   private cropper = new Cropper(this.mc.map, 0, 0);
-  private message = (data: any) => {};
+  private message = (_data: GuestMessage) => {};
   private inThrottle = false;
   private previousPosition = { x: 0, y: 0 };
   private users: { [key: string]: User } = {};
@@ -33,7 +33,7 @@ export default class Controller {
     // 初期化処理
     this.message = message;
     this.canvas = canvas;
-    this.mc = new MapCreater();
+    this.mc = new MapCreator();
     // canvasRef を mc に設定しておくことで、newMap前のresizeでも実canvasにサイズが反映される
     this.mc.setCanvas(canvas);
     this.cropper = new Cropper(this.mc.map, 0, 0);

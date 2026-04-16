@@ -68,7 +68,8 @@ async def discord(code: str | None = None) -> User:
         except HTTPException:
             raise
         except Exception as err:
-            raise HTTPException(401, str(err))
+            logger.exception("discord auth failed")
+            raise HTTPException(401, "Authentication failed") from err
 
 
 async def _auth_discord(client: AsyncClient, code: str, redirect: str) -> str:
