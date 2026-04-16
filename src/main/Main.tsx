@@ -14,6 +14,7 @@ export default function Main() {
   const [playerId, setPlayerId] = createSignal<string>("");
   const [area, setArea] = createSignal<boolean[][]>([]);
   const [tab, setTab] = createSignal<Tab>("map");
+  const [canvasSize, setCanvasSize] = createSignal(0);
   const mq = window.matchMedia("(orientation: portrait)");
   const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
@@ -28,6 +29,7 @@ export default function Main() {
         canvasRef.width = size;
         canvasRef.height = size;
       }
+      setCanvasSize(size);
       manager.onResize();
     };
     const handleOrientation = (e: MediaQueryListEvent) => {
@@ -36,14 +38,13 @@ export default function Main() {
     mq.addEventListener("change", handleOrientation);
     applySize();
     window.addEventListener("resize", applySize);
+
     onCleanup(() => {
       mq.removeEventListener("change", handleOrientation);
       window.removeEventListener("resize", applySize);
+      manager.end();
     });
   });
-
-  // コンポーネントのアンマウント時に RTC 接続を確実に切断する（ページ遷移/リロード対応）
-  onCleanup(() => manager.end());
 
   async function connectButton() {
     const res = await request("POST", "/init");
@@ -58,8 +59,8 @@ export default function Main() {
     canvasRef?.focus();
   }
 
-  function leaveButton() {
-    manager.end();
+  async function leaveButton() {
+    await manager.end();
     setConnected(false);
     location.reload();
   }
@@ -111,6 +112,7 @@ export default function Main() {
               <ProfileForm
                 initialUser={users()[playerId()]}
                 onSaved={() => setTab("map")}
+                canvasSize={canvasSize()}
               />
             </div>
           </Show>
@@ -125,6 +127,7 @@ export default function Main() {
           users={users()}
           playerId={playerId()}
           area={area()}
+          canvasSize={canvasSize()}
         />
       </div>
     </div>

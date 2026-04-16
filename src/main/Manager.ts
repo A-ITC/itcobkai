@@ -126,9 +126,9 @@ export default class Manager {
     }
   }
 
-  public end() {
+  public async end() {
     this.mc.destroy();
-    this.rtc.end();
+    await this.rtc.end();
   }
 
   public mute() {

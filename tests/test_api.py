@@ -186,7 +186,7 @@ class TestApiMaster:
     async def test_leave_removes_participant(self, local_client):
         """LEAVE コマンドは LiveKit API を通じてユーザーを削除して 200 を返す"""
         mock_remove = AsyncMock()
-        with patch("api.api.master.lkapi") as mock_lkapi:
+        with patch("api.api.admin.lkapi") as mock_lkapi:
             mock_lkapi.room.remove_participant = mock_remove
             resp = await local_client.post(
                 "/api/master", json={"command": "LEAVE", "h": "target_user_hash"}
@@ -197,7 +197,7 @@ class TestApiMaster:
 
     async def test_leave_livekit_error_returns_400(self, local_client):
         """LEAVE コマンドで LiveKit エラーが起きると 400 を返す"""
-        with patch("api.api.master.lkapi") as mock_lkapi:
+        with patch("api.api.admin.lkapi") as mock_lkapi:
             mock_lkapi.room.remove_participant = AsyncMock(
                 side_effect=Exception("Not found")
             )

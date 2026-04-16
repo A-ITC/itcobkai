@@ -69,9 +69,9 @@ export class RTCClient {
     }
   }
 
-  public end() {
+  public async end() {
     if (this.room) {
-      this.room.disconnect();
+      await this.room.disconnect();
       this.room = null;
       this.dataTo = undefined;
     }

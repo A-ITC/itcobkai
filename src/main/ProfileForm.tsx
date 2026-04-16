@@ -16,6 +16,7 @@ type Props = {
   /** 提供された場合は /users/@me の GET を省略しネットワーク負荷を軽減する */
   initialUser?: User;
   onSaved?: () => void;
+  canvasSize?: number;
 };
 
 export default function ProfileForm(props: Props) {
@@ -64,7 +65,15 @@ export default function ProfileForm(props: Props) {
   }
 
   return (
-    <div class="mx-auto max-w-sm px-4 pb-8 text-center">
+    <div
+      class="mx-auto max-w-sm px-4 pb-8 text-center"
+      style={{
+        "max-height":
+          props.canvasSize && window.matchMedia("(orientation: landscape)").matches
+            ? `${props.canvasSize}px`
+            : undefined
+      }}
+    >
       <h2 class="py-4 text-center text-xl font-bold">プロフィール設定</h2>
 
       {loading() ? (
@@ -144,6 +153,7 @@ export default function ProfileForm(props: Props) {
           </button>
         </form>
       )}
+      <div class="pt-4" />
     </div>
   );
 }
