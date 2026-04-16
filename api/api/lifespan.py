@@ -7,7 +7,10 @@ from ..rtc.mixer import mixing_loop
 from ..rtc.state import active_sessions, audio_tasks
 from ..master.user import us
 from ..utils.logger import init_logger
-from ..master.mapper import mapper, load_first_map
+from ..master.connection_service import connection_service
+from ..master.grid import prepare_map
+from ..master.map_repository import map_repository
+from ..master.position_store import position_store
 from ..master.master import register
 
 logger = getLogger(__name__)
@@ -20,10 +23,12 @@ async def lifespan(app: FastAPI):
     register()
     logger.info("start lifespan")
     us.load()
-    map_name, meta, raw = load_first_map()
+    meta = map_repository.load_map()
+    prepared = prepare_map(meta)
     # ValueError は伝播させてアプリ起動を失敗させる
-    mapper.init(raw, meta)
-    logger.info(f"map initialized: {map_name}")
+    position_store.initialize(prepared)
+    connection_service.initialize(prepared)
+    logger.info(f"map initialized: {meta.name}")
     mixing_task = create_task(mixing_loop())
     yield
     logger.info("end lifespan")

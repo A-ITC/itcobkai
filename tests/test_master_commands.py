@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 from api.rtc.adapter import GuestCommand, HostCommand, handler
 from api.rtc.state import active_sessions, muted_users
 from api.master.user import User, UserStore, us
-from api.master.mapper import mapper
+from api.master.position_store import position_store
 from tests.conftest import make_test_user
 
 
@@ -47,7 +47,7 @@ class TestOnMessageMove:
 
         await on_message(HA, {"command": GuestCommand.MOVE, "x": 3, "y": 2})
 
-        assert mapper.user_positions.get(HA) == (3, 2)
+        assert position_store.user_positions.get(HA) == (3, 2)
 
     async def test_move_to_noentry_cell_is_ignored(self, mock_mapper):
         """noentry セルへの移動は無視される"""
@@ -258,7 +258,7 @@ class TestOnJoin:
             patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()),
         ):
             await on_join(HA)
-        pos = mapper.user_positions[HA]
+        pos = position_store.user_positions[HA]
         assert isinstance(pos, tuple)
         assert len(pos) == 2
 
@@ -326,12 +326,12 @@ class TestOnLeave:
         _add_session(HA)
         _add_session(HB)
         mock_mapper.new_user(HA)
-        assert HA in mapper.user_positions
+        assert HA in position_store.user_positions
 
         with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await on_leave(HA)
 
-        assert HA not in mapper.user_positions
+        assert HA not in position_store.user_positions
 
     async def test_leave_broadcasts_leave_to_all_users(self, mock_mapper):
         """on_leave は HostCommand.LEFT を全ユーザーにブロードキャストする"""

@@ -10,6 +10,8 @@ class Move:
 
 @dataclass
 class MapMeta:
+    """フロントに渡すためのマップ情報"""
+
     name: str
     top: str
     bottom: str

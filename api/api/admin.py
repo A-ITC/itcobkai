@@ -12,7 +12,10 @@ from ..rtc.adapter import (
     send_message_all,
 )
 from ..utils.schema import Move
-from ..master.mapper import mapper, load_map_by_name
+from ..master.connection_service import connection_service
+from ..master.grid import prepare_map
+from ..master.map_repository import map_repository
+from ..master.position_store import position_store
 from fastapi.responses import JSONResponse
 
 logger = getLogger(__name__)
@@ -34,19 +37,21 @@ async def master_request(post: MasterRequest):
 
     if post.command == "NEWMAP" and post.map:
         try:
-            meta, raw = load_map_by_name(post.map)
+            meta = map_repository.load_map(post.map)
         except KeyError:
             return JSONResponse(content={"error": "Map not found"}, status_code=404)
         try:
-            mapper.init(raw, meta)
+            prepared = prepare_map(meta)
+            position_store.initialize(prepared)
+            connection_service.initialize(prepared)
         except ValueError as e:
             return JSONResponse(content={"error": str(e)}, status_code=400)
         moves: list[Move] = []
         for session_h in list(active_sessions.keys()):
-            move = mapper.new_user(session_h)
+            move = position_store.new_user(session_h)
             us.set_position(session_h, move.x, move.y)
             moves.append(move)
-        await send_message_all(NewmapCommand(map=mapper.get_map_meta()))
+        await send_message_all(NewmapCommand(map=position_store.get_map_meta()))
         if moves:
             # 自分自身の座標は送信しない（クライアント側の座標を優先）
             for recipient_h in list(active_sessions.keys()):

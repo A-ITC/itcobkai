@@ -1,6 +1,7 @@
 from .user import User, UserUpdateInput, us
 from logging import getLogger
-from .mapper import mapper
+from .connection_service import connection_service
+from .position_store import position_store
 from ..rtc.state import set_mute, connects
 from ..utils.schema import Move
 
@@ -37,8 +38,12 @@ def register():
                 x, y = int(message["x"]), int(message["y"])
                 logger.info(f"MOVE - {us.get_name(h)}: x={x}, y={y}")
                 # 位置が実際に変化した場合のみ接続を更新してブロードキャストする（キャッシュ効果）
-                if mapper.move(h, x, y):
-                    connects(mapper.get_current_islands())
+                if position_store.move(h, x, y):
+                    connects(
+                        connection_service.get_current_islands(
+                            position_store.get_all_positions()
+                        )
+                    )
                     await send_message_all(MovedCommand(moves=[Move(h=h, x=x, y=y)]))
             case GuestCommand.UPDATE:
                 try:
@@ -71,27 +76,25 @@ def register():
 
     @on_join
     async def _(h: str):
-        m = mapper
-
-        move = m.new_user(h)
+        move = position_store.new_user(h)
         us.set_position(h, move.x, move.y)
 
         # 全ユーザーリスト（座標込み）を構築
         users = []
-        for session_h in list(m.user_positions.keys()):
+        for session_h in position_store.list_user_ids():
             user = us.get(session_h)
             if user:
                 users.append(user.model_dump())
 
         # 自分自身がリストに含まれていない場合（us に未登録など）でも必ず追加する
         if not any(u["h"] == h for u in users):
-            pos = m.user_positions.get(h, (move.x, move.y))
+            pos = position_store.get_position(h) or (move.x, move.y)
             users.append(User(h=h, x=pos[0], y=pos[1]).model_dump())
 
         # 新規ユーザーに INIT 送信
         await send_message(
             h,
-            InitCommand(users=users, map=m.get_map_meta()),
+            InitCommand(users=users, map=position_store.get_map_meta()),
         )
 
         # 既存ユーザーへ JOIN ブロードキャスト
@@ -99,10 +102,14 @@ def register():
         if user:
             await send_message_others(h, JoinedCommand(user=user.model_dump()))
 
-        connects(m.get_current_islands())
+        connects(
+            connection_service.get_current_islands(position_store.get_all_positions())
+        )
 
     @on_leave
     async def _(h: str):
-        mapper.remove_user(h)
-        connects(mapper.get_current_islands())
+        position_store.remove_user(h)
+        connects(
+            connection_service.get_current_islands(position_store.get_all_positions())
+        )
         await send_message_all(LeftCommand(h=h))

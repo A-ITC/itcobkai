@@ -1,18 +1,63 @@
-from dataclasses import dataclass
-
-
-@dataclass
-class MapRaw:
-    red: str  # area (islands)
-    black: str  # noentry
+from dataclasses import dataclass, replace
+from ..utils.schema import MapMeta
 
 
 type Position = tuple[int, int]
 
 
+@dataclass
+class PreparedMap:
+    meta: MapMeta
+    area: list[list[bool]]
+    noentry: list[list[bool]]
+    walkable_cells: list[Position]
+    island_ids: list[list[int]]
+    width: int
+    height: int
+
+
 def parse_grid(raw: str) -> list[list[bool]]:
     """CSV形式の文字列をboolグリッドに変換する"""
     return [[char == "1" for char in row] for row in raw.split(",")]
+
+
+def prepare_map(meta: MapMeta) -> PreparedMap:
+    """MapMeta からマップの実行時データを構築する"""
+    area = parse_grid(meta.red)
+    noentry = parse_grid(meta.black)
+    height = len(area)
+    width = len(area[0]) if height > 0 else 0
+
+    if any(len(row) != width for row in area) or any(
+        len(row) != width for row in noentry
+    ):
+        raise ValueError("マップデータが不正です: 行ごとの幅が一致していません")
+
+    if len(noentry) != height:
+        raise ValueError(
+            "マップデータが不正です: red と black の高さが一致していません"
+        )
+
+    walkable_cells: list[Position] = []
+    for y in range(height):
+        for x in range(width):
+            if not noentry[y][x]:
+                walkable_cells.append((x, y))
+
+    if height == 0 or width == 0 or not walkable_cells:
+        raise ValueError(
+            f"マップデータが不正です: height={height}, width={width}, walkable={len(walkable_cells)}"
+        )
+
+    return PreparedMap(
+        meta=replace(meta, width=width, height=height),
+        area=area,
+        noentry=noentry,
+        walkable_cells=walkable_cells,
+        island_ids=label_islands(area, width, height),
+        width=width,
+        height=height,
+    )
 
 
 def label_islands(area: list[list[bool]], width: int, height: int) -> list[list[int]]:

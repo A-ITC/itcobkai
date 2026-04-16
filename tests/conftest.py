@@ -28,9 +28,10 @@ from api.api.router import router, _check_secret_key
 from api.api.auth import encode
 from api.rtc.rtc import lkapi
 from api.rtc.state import active_sessions, muted_users, connects
+from api.master.connection_service import connection_service
+from api.master.grid import prepare_map
 from api.master.user import User, UserStore, us
-from api.master.grid import MapRaw
-from api.master.mapper import mapper
+from api.master.position_store import position_store
 from api.utils.schema import MapMeta
 
 
@@ -57,7 +58,8 @@ def reset_state():
     active_sessions.clear()
     muted_users.clear()
     connects([])
-    mapper.reset()
+    position_store.reset()
+    connection_service.reset()
     yield
     us._users.clear()
     if us._save_task and not us._save_task.done():
@@ -66,7 +68,8 @@ def reset_state():
     active_sessions.clear()
     muted_users.clear()
     connects([])
-    mapper.reset()
+    position_store.reset()
+    connection_service.reset()
 
 
 @pytest.fixture(autouse=True)
@@ -138,11 +141,12 @@ def mock_mapper():
     """5x5 の単純グリッドでマッパーを初期化する（テスト用）"""
     red = "11111,11111,11111,11111,11111"  # 全セル island 対象
     black = "00000,00000,00000,00000,00000"  # 衝突なし
-    mapper.init(
-        MapRaw(red=red, black=black),
-        MapMeta(name="test_map", top="", bottom=""),
+    prepared = prepare_map(
+        MapMeta(name="test_map", top="", bottom="", red=red, black=black)
     )
-    return mapper
+    position_store.initialize(prepared)
+    connection_service.initialize(prepared)
+    return position_store
 
 
 # ---------------------------------------------------------------------------

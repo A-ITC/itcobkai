@@ -35,7 +35,7 @@ from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
 from api.rtc.state import active_sessions, connects
 from api.master.user import User, UserStore, us
-from api.master.mapper import mapper
+from api.master.position_store import position_store
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -321,8 +321,8 @@ async def test_lk_move_broadcasts_moved_immediately(two_participants):
     pa, pb = two_participants
 
     # スポーン位置と必ず異なる座標を選ぶ（固定座標だとスポーン位置と重なり mapper.move が False を返す可能性がある）
-    current = mapper.user_positions.get(HA, (0, 0))
-    target_x = (current[0] + 1) % mapper.width
+    current = position_store.user_positions.get(HA, (0, 0))
+    target_x = (current[0] + 1) % position_store.width
     target_y = current[1]
     await pa.send(
         {
