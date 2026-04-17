@@ -25,13 +25,6 @@ class UserSession:
     primed: bool = False
 
 
-# グローバル管理
-active_sessions: dict[str, UserSession] = {}
-current_islands: list[list[str]] = []
-muted_users: set[str] = set()
-audio_tasks: set = set()
-
-
 @dataclass
 class Handler:
     on_message: Any = field(default_factory=lambda: lambda user, message: None)
@@ -39,29 +32,55 @@ class Handler:
     on_leave: Any = field(default_factory=lambda: lambda user: None)
 
 
-handler = Handler()
+@dataclass
+class RoomContext:
+    active_sessions: dict[str, UserSession] = field(default_factory=dict)
+    current_islands: list[list[str]] = field(default_factory=list)
+    muted_users: set[str] = field(default_factory=set)
+    audio_tasks: set[Any] = field(default_factory=set)
+    handlers: Handler = field(default_factory=Handler)
+    position_store: Any = None
+    connection_service: Any = None
+    user_store: Any = None
+
+    def connects(self, islands: list[list[str]]):
+        self.current_islands.clear()
+        self.current_islands.extend(islands)
+
+    def set_mute(self, h: str, muted: bool):
+        if muted:
+            self.muted_users.add(h)
+        else:
+            self.muted_users.discard(h)
+
+    async def send_raw_message(self, user: str, message: dict):
+        if session := self.active_sessions.get(user):
+            await session.room.local_participant.publish_data(
+                payload=dumps(message).encode("utf-8")
+            )
+
+    async def send_raw_message_bytes(self, user: str, data: bytes):
+        """あらかじめシリアライズ済みのバイト列を送信する（ブロードキャスト時に JSON 変換を 1 回に削減）"""
+        if session := self.active_sessions.get(user):
+            await session.room.local_participant.publish_data(payload=data)
 
 
-def connects(islands: list[list[str]]):
-    current_islands.clear()
-    current_islands.extend(islands)
+def create_room_context(
+    *,
+    position_store: Any = None,
+    connection_service: Any = None,
+    user_store: Any = None,
+) -> RoomContext:
+    return RoomContext(
+        position_store=position_store,
+        connection_service=connection_service,
+        user_store=user_store,
+    )
 
 
-def set_mute(h: str, muted: bool):
-    if muted:
-        muted_users.add(h)
-    else:
-        muted_users.discard(h)
+async def send_raw_message(ctx: RoomContext, user: str, message: dict):
+    await ctx.send_raw_message(user, message)
 
 
-async def send_raw_message(user: str, message: dict):
-    if session := active_sessions.get(user):
-        await session.room.local_participant.publish_data(
-            payload=dumps(message).encode("utf-8")
-        )
-
-
-async def send_raw_message_bytes(user: str, data: bytes):
-    """あらかじめシリアライズ済みのバイト列を送信する（ブロードキャスト時に JSON 変換を 1 回に削減）"""
-    if session := active_sessions.get(user):
-        await session.room.local_participant.publish_data(payload=data)
+async def send_raw_message_bytes(ctx: RoomContext, user: str, data: bytes):
+    await ctx.send_raw_message_bytes(user, data)

@@ -43,9 +43,6 @@ from api.rtc.state import (
     SAMPLE_RATE,
     NUM_CHANNELS,
     FRAME_SAMPLES,
-    active_sessions,
-    connects,
-    set_mute,
 )
 from api.master.user import UserStore, us
 from api.utils.config import DOMAIN
@@ -232,7 +229,7 @@ class _AudioTestParticipant:
 
 
 @pytest.fixture
-async def audio_rooms(livekit_domain, mock_mapper):
+async def audio_rooms(livekit_domain, mock_mapper, room_context):
     """2ユーザー分のルームを初期化し、両参加者を接続して mixing_loop を起動する。
 
     - HA, HB それぞれの UserStore を事前登録
@@ -242,8 +239,8 @@ async def audio_rooms(livekit_domain, mock_mapper):
     us._users[HA] = make_test_user(HA, "Audio User A")
     us._users[HB] = make_test_user(HB, "Audio User B")
 
-    await init_room(HA)
-    await init_room(HB)
+    await init_room(room_context, HA)
+    await init_room(room_context, HB)
 
     pa = _AudioTestParticipant(HA)
     pb = _AudioTestParticipant(HB)
@@ -255,9 +252,9 @@ async def audio_rooms(livekit_domain, mock_mapper):
     await pb.wait_for_command("INIT", timeout=15.0)
 
     # mixing_loop をバックグラウンドで起動
-    mixing_task = asyncio.create_task(mixing_loop())
+    mixing_task = asyncio.create_task(mixing_loop(room_context))
 
-    yield pa, pb
+    yield pa, pb, room_context
 
     mixing_task.cancel()
     try:
@@ -268,10 +265,10 @@ async def audio_rooms(livekit_domain, mock_mapper):
     await pa.disconnect()
     await pb.disconnect()
 
-    connects([])
+    room_context.connects([])
 
     for h in [HA, HB]:
-        session = active_sessions.pop(h, None)
+        session = room_context.active_sessions.pop(h, None)
         if session:
             await session.room.disconnect()
 
@@ -284,10 +281,10 @@ async def audio_rooms(livekit_domain, mock_mapper):
 @pytest.mark.livekit
 async def test_lk_audio_delivered_in_same_island(audio_rooms):
     """同じ島 (connects([[HA, HB]])) のとき HA の音声が HB に届く。"""
-    pa, pb = audio_rooms
+    pa, pb, room_context = audio_rooms
 
     # 島を設定: HA と HB を同じグループに
-    connects([[HA, HB]])
+    room_context.connects([[HA, HB]])
 
     # HA が音声を送信開始
     await pa.publish_audio()
@@ -305,13 +302,13 @@ async def test_lk_audio_delivered_in_same_island(audio_rooms):
 @pytest.mark.livekit
 async def test_lk_audio_muted_sender_not_heard(audio_rooms):
     """HA がミュート状態のとき HB に音声が届かない。"""
-    pa, pb = audio_rooms
+    pa, pb, room_context = audio_rooms
 
     # HA をミュートに設定
-    set_mute(HA, True)
+    room_context.set_mute(HA, True)
 
     # 島を設定: 同じグループだがミュート
-    connects([[HA, HB]])
+    room_context.connects([[HA, HB]])
 
     # HA が音声を送信開始
     await pa.publish_audio()
@@ -329,10 +326,10 @@ async def test_lk_audio_muted_sender_not_heard(audio_rooms):
 @pytest.mark.livekit
 async def test_lk_audio_not_delivered_in_different_islands(audio_rooms):
     """異なる島 (connects([[HA], [HB]])) のとき HA の音声が HB に届かない。"""
-    pa, pb = audio_rooms
+    pa, pb, room_context = audio_rooms
 
     # 島を別々に設定: HA と HB を異なるグループに
-    connects([[HA], [HB]])
+    room_context.connects([[HA], [HB]])
 
     # HA が音声を送信開始
     await pa.publish_audio()
@@ -355,10 +352,10 @@ async def test_lk_jitter_buffer_primes_before_mixing(audio_rooms):
     - 接続直後（キュー < 2 フレーム）は HB に音声が届かない
     - キューが 2 フレーム以上溜まると HB に音声が届くようになる
     """
-    pa, pb = audio_rooms
+    pa, pb, room_context = audio_rooms
 
     # 同じ島に設定
-    connects([[HA, HB]])
+    room_context.connects([[HA, HB]])
 
     # HA が音声を送信開始（mixing_loop が実行中でジッターバッファがある）
     await pa.publish_audio()
@@ -378,9 +375,9 @@ async def test_lk_jitter_buffer_primes_before_mixing(audio_rooms):
 @pytest.mark.livekit
 async def test_lk_mixing_output_frame_size_is_20ms(audio_rooms):
     """mixing_loop() が出力する AudioFrame が FRAME_SAMPLES (960) サンプルであることを確認する。"""
-    pa, pb = audio_rooms
+    pa, pb, room_context = audio_rooms
 
-    connects([[HA, HB]])
+    room_context.connects([[HA, HB]])
     await pa.publish_audio()
 
     # 音声フレームが届くまで待機

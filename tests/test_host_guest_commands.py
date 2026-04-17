@@ -33,7 +33,6 @@ from livekit.rtc import DataPacket, Room
 from api.rtc.adapter import GuestCommand, HostCommand
 from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
-from api.rtc.state import active_sessions, connects
 from api.master.user import User, UserStore, us
 from api.master.position_store import position_store
 from tests.conftest import make_test_user
@@ -128,7 +127,7 @@ class _TestParticipant:
 
 
 @pytest.fixture
-async def two_participants(livekit_domain, mock_mapper):
+async def two_participants(livekit_domain, mock_mapper, room_context):
     """2ユーザー分の LiveKit ルームとボットを初期化し、参加者を接続する。
 
     - HA, HB それぞれの UserStore を事前登録（JOIN ブロードキャストが機能するため）
@@ -139,8 +138,8 @@ async def two_participants(livekit_domain, mock_mapper):
     us._users[HB] = make_test_user(HB, "User B")
 
     # ルーム+ボット初期化
-    await init_room(HA)
-    await init_room(HB)
+    await init_room(room_context, HA)
+    await init_room(room_context, HB)
 
     pa = _TestParticipant(HA)
     pb = _TestParticipant(HB)
@@ -164,7 +163,7 @@ async def two_participants(livekit_domain, mock_mapper):
 
     # ボットセッションのクリーンアップ
     for h in [HA, HB]:
-        session = active_sessions.pop(h, None)
+        session = room_context.active_sessions.pop(h, None)
         if session:
             await session.room.disconnect()
 
@@ -175,11 +174,11 @@ async def two_participants(livekit_domain, mock_mapper):
 
 
 @pytest.mark.livekit
-async def test_lk_init_received_on_join(livekit_domain, mock_mapper):
+async def test_lk_init_received_on_join(livekit_domain, mock_mapper, room_context):
     """ユーザーが参加すると HostCommand.INIT を受け取る"""
     us._users[HA] = make_test_user(HA)
 
-    await init_room(HA)
+    await init_room(room_context, HA)
     pa = _TestParticipant(HA)
     await pa.connect()
 
@@ -191,7 +190,7 @@ async def test_lk_init_received_on_join(livekit_domain, mock_mapper):
     assert "map" in msg
 
     await pa.disconnect()
-    session = active_sessions.pop(HA, None)
+    session = room_context.active_sessions.pop(HA, None)
     if session:
         await session.room.disconnect()
 
@@ -202,13 +201,15 @@ async def test_lk_init_received_on_join(livekit_domain, mock_mapper):
 
 
 @pytest.mark.livekit
-async def test_lk_join_broadcast_when_new_user_connects(livekit_domain, mock_mapper):
+async def test_lk_join_broadcast_when_new_user_connects(
+    livekit_domain, mock_mapper, room_context
+):
     """新しいユーザーが参加すると既存ユーザーに HostCommand.JOIN がブロードキャストされる"""
     us._users[HA] = make_test_user(HA, "User A")
     us._users[HB] = make_test_user(HB, "User B")
 
-    await init_room(HA)
-    await init_room(HB)
+    await init_room(room_context, HA)
+    await init_room(room_context, HB)
 
     pa = _TestParticipant(HA)
     await pa.connect()
@@ -229,7 +230,7 @@ async def test_lk_join_broadcast_when_new_user_connects(livekit_domain, mock_map
     await pa.disconnect()
     await pb.disconnect()
     for h in [HA, HB]:
-        session = active_sessions.pop(h, None)
+        session = room_context.active_sessions.pop(h, None)
         if session:
             await session.room.disconnect()
 
@@ -348,13 +349,15 @@ async def test_lk_move_broadcasts_moved_immediately(two_participants):
 
 
 @pytest.mark.livekit
-async def test_lk_leave_broadcasts_to_remaining_users(livekit_domain, mock_mapper):
+async def test_lk_leave_broadcasts_to_remaining_users(
+    livekit_domain, mock_mapper, room_context
+):
     """ユーザーが退出すると残りのユーザーに HostCommand.LEAVE がブロードキャストされる"""
     us._users[HA] = make_test_user(HA, "User A")
     us._users[HB] = make_test_user(HB, "User B")
 
-    await init_room(HA)
-    await init_room(HB)
+    await init_room(room_context, HA)
+    await init_room(room_context, HB)
 
     pa = _TestParticipant(HA)
     pb = _TestParticipant(HB)
@@ -378,7 +381,7 @@ async def test_lk_leave_broadcasts_to_remaining_users(livekit_domain, mock_mappe
     assert msg["h"] == HB
 
     await pa.disconnect()
-    session = active_sessions.pop(HA, None)
+    session = room_context.active_sessions.pop(HA, None)
     if session:
         await session.room.disconnect()
 

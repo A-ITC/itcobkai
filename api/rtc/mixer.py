@@ -2,15 +2,12 @@ import asyncio
 import numpy as np
 from logging import getLogger
 from .state import (
+    RoomContext,
     SAMPLE_RATE,
     NUM_CHANNELS,
     FRAME_SAMPLES,
     FRAME_DURATION_S,
     UserSession,
-    active_sessions,
-    current_islands,
-    muted_users,
-    audio_tasks,
 )
 from asyncio import CancelledError, current_task, get_event_loop, sleep
 from livekit.rtc import AudioFrame, AudioStream, Track
@@ -32,7 +29,7 @@ _silence_bytes = np.zeros(
 ).tobytes()  # 無音フレーム（定数）
 
 
-async def process_user_audio(session: UserSession, track: Track):
+async def process_user_audio(session: UserSession, track: Track, ctx: RoomContext):
     """受信した音声を FRAME_SAMPLES サイズに揃えてキューに詰める（受信側の処理）
 
     LiveKit から届くフレームサイズは送信側に依存するため、
@@ -88,10 +85,10 @@ async def process_user_audio(session: UserSession, track: Track):
         await audio_stream.aclose()
         raise
     finally:
-        audio_tasks.discard(current_task())
+        ctx.audio_tasks.discard(current_task())
 
 
-async def mixing_loop():
+async def mixing_loop(ctx: RoomContext):
     """20ms ごとに各島の音声を合成して送信
 
     改善点:
@@ -110,7 +107,7 @@ async def mixing_loop():
         # 各ユーザーの最新 20ms 分の音声をキューから取り出しておく
         # スナップショットを取ることで、await 中に active_sessions が変更されても
         # RuntimeError: dictionary changed size during iteration を防ぐ
-        for session in list(active_sessions.values()):
+        for session in list(ctx.active_sessions.values()):
             try:
                 # ジッターバッファ: キューに 2 フレーム以上貯まるまで読み始めない
                 if not session.primed:
@@ -128,13 +125,13 @@ async def mixing_loop():
         # 島ごとのミキシング（capture_frame ごとの coroutine を収集して並列実行）
         capture_coros = []
         # current_islands のスナップショット（このループ中に connects() が呼ばれても安全）
-        for island in list(current_islands):
+        for island in list(ctx.current_islands):
             # ミュートしていないユーザーの音声フレームを収集（O(N)）
             # active_sessions.get() で確認と取得を一操作にまとめ KeyError を排除
             frames: dict[str, np.ndarray] = {}
             for u in island:
-                s = active_sessions.get(u)
-                if s is not None and u not in muted_users:
+                s = ctx.active_sessions.get(u)
+                if s is not None and u not in ctx.muted_users:
                     frames[u] = s.last_frame
 
             # 全員の音声合計を事前確保バッファに in-place で計算（中間配列の生成を回避）
@@ -144,7 +141,7 @@ async def mixing_loop():
                     np.add(_island_sum, f, out=_island_sum, casting="unsafe")
 
             for target_user in island:
-                session = active_sessions.get(target_user)
+                session = ctx.active_sessions.get(target_user)
                 if not session:
                     continue
 

@@ -1,7 +1,7 @@
 from logging import getLogger
 from pydantic import BaseModel
 from ..rtc.rtc import lkapi, init_room
-from ..rtc.state import active_sessions
+from ..rtc.state import RoomContext
 from livekit.api import RoomParticipantIdentity
 from ..master.user import us
 from ..rtc.adapter import (
@@ -29,10 +29,14 @@ class MasterRequest(BaseModel):
     h: str | None = None
 
 
-async def master_request(post: MasterRequest):
+async def master_request(ctx: RoomContext, post: MasterRequest):
+    room_position_store = ctx.position_store
+    room_connection_service = ctx.connection_service
+    room_user_store = ctx.user_store or us
+
     if post.command == "ALERT":
         text = post.text or ""
-        await send_message_all(AlertCommand(text=text, reload=post.reload))
+        await send_message_all(ctx, AlertCommand(text=text, reload=post.reload))
         return {"ok": True}
 
     if post.command == "NEWMAP" and post.map:
@@ -42,22 +46,29 @@ async def master_request(post: MasterRequest):
             return JSONResponse(content={"error": "Map not found"}, status_code=404)
         try:
             prepared = prepare_map(meta)
-            position_store.initialize(prepared)
-            connection_service.initialize(prepared)
+            room_position_store.initialize(prepared)
+            room_connection_service.initialize(prepared)
         except ValueError as e:
             return JSONResponse(content={"error": str(e)}, status_code=400)
         moves: list[Move] = []
-        for session_h in list(active_sessions.keys()):
-            move = position_store.new_user(session_h)
-            us.set_position(session_h, move.x, move.y)
+        for session_h in list(ctx.active_sessions.keys()):
+            move = room_position_store.new_user(session_h)
+            room_user_store.set_position(session_h, move.x, move.y)
             moves.append(move)
-        await send_message_all(NewmapCommand(map=position_store.get_map_meta()))
+        ctx.connects(
+            room_connection_service.get_current_islands(
+                room_position_store.get_all_positions()
+            )
+        )
+        await send_message_all(
+            ctx, NewmapCommand(map=room_position_store.get_map_meta())
+        )
         if moves:
             # 自分自身の座標は送信しない（クライアント側の座標を優先）
-            for recipient_h in list(active_sessions.keys()):
+            for recipient_h in list(ctx.active_sessions.keys()):
                 others = [mv for mv in moves if mv.h != recipient_h]
                 if others:
-                    await send_message(recipient_h, MovedCommand(moves=others))
+                    await send_message(ctx, recipient_h, MovedCommand(moves=others))
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:
@@ -71,20 +82,20 @@ async def master_request(post: MasterRequest):
 
     if post.command == "USERS":
         users = []
-        for session_h in list(active_sessions.keys()):
-            user = us.get(session_h)
+        for session_h in list(ctx.active_sessions.keys()):
+            user = room_user_store.get(session_h)
             users.append({"h": session_h, "name": user.name if user else ""})
         return {"users": users}
 
     if post.command == "BOTINIT" and post.h:
         h = post.h
-        old = active_sessions.pop(h, None)
+        old = ctx.active_sessions.pop(h, None)
         if old:
             try:
                 await old.room.disconnect()
             except Exception:
                 pass
-        await init_room(h)
+        await init_room(ctx, h)
         return {"ok": True}
 
     return JSONResponse(content={"error": "Unknown command"}, status_code=400)

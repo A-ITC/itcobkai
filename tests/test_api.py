@@ -8,7 +8,6 @@ from httpx import AsyncClient, ASGITransport
 
 from api.api.auth import encode
 from api.utils.config import APP_NAME
-from api.rtc.rtc import active_sessions
 from api.master.user import UserStore, us
 from tests.conftest import make_test_user
 
@@ -65,7 +64,7 @@ class TestApiInit:
 
     @pytest.mark.livekit
     async def test_valid_token_with_livekit_returns_token(
-        self, client, valid_auth_header, mock_mapper, livekit_domain
+        self, client, valid_auth_header, mock_mapper, livekit_domain, room_context
     ):
         """有効なトークン + LiveKit 起動中 → 200 + LiveKit トークン返却"""
         resp = await client.post("/api/init", headers=valid_auth_header)
@@ -74,10 +73,8 @@ class TestApiInit:
         assert "token" in body
 
         # クリーンアップ
-        from api.rtc.rtc import active_sessions as sess
-
         h = "testhash123"
-        session = sess.pop(h, None)
+        session = room_context.active_sessions.pop(h, None)
         if session:
             await session.room.disconnect()
 
@@ -206,12 +203,12 @@ class TestApiMaster:
             )
         assert resp.status_code == 400
 
-    async def test_users_returns_active_sessions(self, local_client):
+    async def test_users_returns_active_sessions(self, local_client, room_context):
         """USERS コマンドはアクティブセッション一覧を返す"""
         # active_sessions にダミーセッションを追加
         dummy = MagicMock()
         dummy.username = "user_abc"
-        active_sessions["user_abc"] = dummy
+        room_context.active_sessions["user_abc"] = dummy
         us._users["user_abc"] = make_test_user("user_abc", "Alice")
 
         resp = await local_client.post("/api/master", json={"command": "USERS"})
@@ -343,8 +340,6 @@ class TestApiUsersMe:
 
     async def test_post_me_broadcasts_updated(self, client, valid_auth_header):
         """POST 後に UPDATED が他ユーザーへブロードキャストされる"""
-        from api.rtc.rtc import active_sessions
-
         us._users["testhash123"] = make_test_user("testhash123", "Alice")
 
         sent_messages: list[dict] = []

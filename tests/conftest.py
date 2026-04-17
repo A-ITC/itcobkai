@@ -22,12 +22,10 @@ from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 
 from api.master.master import register
-
-register()  # @on_message/@on_join/@on_leave ハンドラーを登録（副作用インポートの代替）
 from api.api.router import router, _check_secret_key
 from api.api.auth import encode
 from api.rtc.rtc import lkapi
-from api.rtc.state import active_sessions, muted_users, connects
+from api.rtc.state import create_room_context
 from api.master.connection_service import connection_service
 from api.master.grid import prepare_map
 from api.master.user import User, UserStore, us
@@ -55,9 +53,6 @@ def reset_state():
     if us._save_task and not us._save_task.done():
         us._save_task.cancel()
     us._save_task = None
-    active_sessions.clear()
-    muted_users.clear()
-    connects([])
     position_store.reset()
     connection_service.reset()
     yield
@@ -65,9 +60,6 @@ def reset_state():
     if us._save_task and not us._save_task.done():
         us._save_task.cancel()
     us._save_task = None
-    active_sessions.clear()
-    muted_users.clear()
-    connects([])
     position_store.reset()
     connection_service.reset()
 
@@ -87,9 +79,21 @@ async def _close_lkapi():
 
 
 @pytest.fixture
-def test_app():
+def room_context():
+    ctx = create_room_context(
+        position_store=position_store,
+        connection_service=connection_service,
+        user_store=us,
+    )
+    register(ctx)
+    return ctx
+
+
+@pytest.fixture
+def test_app(room_context):
     """lifespan なし（バックグラウンドタスク不起動）のテスト用 FastAPI アプリ"""
     app = FastAPI()
+    app.state.room_context = room_context
     app.include_router(router)
     return app
 

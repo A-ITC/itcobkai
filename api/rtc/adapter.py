@@ -1,6 +1,6 @@
 from json import dumps
 from enum import StrEnum, auto
-from .state import send_raw_message, send_raw_message_bytes, active_sessions, handler
+from .state import RoomContext, send_raw_message, send_raw_message_bytes
 from asyncio import gather
 from pydantic import BaseModel, Field
 from ..utils.schema import MapMeta, Move
@@ -80,23 +80,26 @@ class MutedCommand(Command):
 # ---------------------------------------------------------------------------
 
 
-async def send_message(h: str, payload: Command):
-    await send_raw_message(h, payload.model_dump())
+async def send_message(ctx: RoomContext, h: str, payload: Command):
+    await send_raw_message(ctx, h, payload.model_dump())
 
 
-async def send_message_all(payload: Command):
-    data = dumps(payload.model_dump()).encode("utf-8")
-    await gather(
-        *[send_raw_message_bytes(h, data) for h in list(active_sessions.keys())]
-    )
-
-
-async def send_message_others(sender_h: str, payload: Command):
+async def send_message_all(ctx: RoomContext, payload: Command):
     data = dumps(payload.model_dump()).encode("utf-8")
     await gather(
         *[
-            send_raw_message_bytes(h, data)
-            for h in list(active_sessions.keys())
+            send_raw_message_bytes(ctx, h, data)
+            for h in list(ctx.active_sessions.keys())
+        ]
+    )
+
+
+async def send_message_others(ctx: RoomContext, sender_h: str, payload: Command):
+    data = dumps(payload.model_dump()).encode("utf-8")
+    await gather(
+        *[
+            send_raw_message_bytes(ctx, h, data)
+            for h in list(ctx.active_sessions.keys())
             if h != sender_h
         ]
     )
@@ -107,16 +110,25 @@ async def send_message_others(sender_h: str, payload: Command):
 # ---------------------------------------------------------------------------
 
 
-def on_message(func):
-    handler.on_message = func
-    return func
+def on_message(ctx: RoomContext):
+    def decorator(func):
+        ctx.handlers.on_message = func
+        return func
+
+    return decorator
 
 
-def on_join(func):
-    handler.on_join = func
-    return func
+def on_join(ctx: RoomContext):
+    def decorator(func):
+        ctx.handlers.on_join = func
+        return func
+
+    return decorator
 
 
-def on_leave(func):
-    handler.on_leave = func
-    return func
+def on_leave(ctx: RoomContext):
+    def decorator(func):
+        ctx.handlers.on_leave = func
+        return func
+
+    return decorator
