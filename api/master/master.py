@@ -1,32 +1,8 @@
-from typing import Literal
-from pydantic import BaseModel, StrictBool, StrictInt, ValidationError
-
-from .user import User, UserUpdateInput, us
+from .user import User, us
+from typing import Annotated, Any, Literal
 from logging import getLogger
-from .connection_service import connection_service
-from .position_store import position_store
-from ..rtc.state import RoomContext
-from ..utils.schema import Move
-
-logger = getLogger(__name__)
-
-
-class MoveMessageInput(BaseModel):
-    command: Literal["move"]
-    x: StrictInt
-    y: StrictInt
-
-
-class UpdateMessageInput(BaseModel):
-    command: Literal["update"]
-    user: UserUpdateInput
-
-
-class MuteMessageInput(BaseModel):
-    command: Literal["mute"]
-    mute: StrictBool
-
-
+from pydantic import Field, StrictBool, StrictInt, validate_call
+from ..rtc.state import connects, set_mute
 from ..rtc.adapter import (
     GuestCommand,
     InitCommand,
@@ -42,168 +18,134 @@ from ..rtc.adapter import (
     on_join,
     on_leave,
 )
+from ..utils.schema import Move
+from .position_store import position_store
+from .position_store import PositionStore
+from .connection_service import connection_service
+
+logger = getLogger(__name__)
+
+type UserGroup = Literal["dtm", "cg", "prog", "mv", "3dcg"]
+Coordinate = Annotated[StrictInt, Field()]
 
 
-def _validate_message(model: type[BaseModel], message: dict, error_message: str):
-    try:
-        return model.model_validate(message)
-    except ValidationError as exc:
-        raise ValueError(error_message) from exc
-
-
-async def handle_move(
-    ctx: RoomContext,
-    h: str,
-    message: MoveMessageInput,
-    room_position_store,
-    room_connection_service,
-    room_user_store,
-):
-    logger.info(f"MOVE - {room_user_store.get_name(h)}: x={message.x}, y={message.y}")
+@validate_call
+async def _handle_move(h: str, x: Coordinate, y: Coordinate) -> None:
+    logger.info(f"MOVE - {us.get_name(h)}: x={x}, y={y}")
     # 位置が実際に変化した場合のみ接続を更新してブロードキャストする（キャッシュ効果）
-    if room_position_store.move(h, message.x, message.y):
-        room_user_store.set_position(h, message.x, message.y)
-        ctx.connects(
-            room_connection_service.get_current_islands(
-                room_position_store.get_all_positions()
-            )
+    if position_store.move(h, x, y):
+        us.set_position(h, x, y)
+        connects(
+            connection_service.get_current_islands(position_store.get_all_positions())
         )
-        await send_message_all(
-            ctx, MovedCommand(moves=[Move(h=h, x=message.x, y=message.y)])
-        )
+        await send_message_all(MovedCommand(moves=[Move(h=h, x=x, y=y)]))
 
 
-async def handle_update(
-    ctx: RoomContext,
+@validate_call
+async def _handle_update(
     h: str,
-    message: UpdateMessageInput,
-    room_position_store,
-    room_user_store,
-):
-    if h != message.user.h:
+    user_h: str = Field(max_length=40),
+    name: str = Field(min_length=1, max_length=40),
+    year: StrictInt = Field(ge=1, le=20),
+    groups: list[Literal["dtm", "cg", "prog", "mv", "3dcg"]] = Field(),
+    greeting: str = Field(max_length=400),
+) -> None:
+    if h != user_h:
         raise ValueError("Invalid user data")
 
-    logger.info(f"UPDATE - {room_user_store.get_name(h)}")
-    current_user = room_user_store.get(h)
-    current_position = room_position_store.get_position(h)
+    logger.info(f"UPDATE - {us.get_name(h)}")
+    current_user = us.get(h)
+    current_position = position_store.get_position(h)
     x, y = current_position if current_position else (0, 0)
     if current_position is None and current_user is not None:
         x, y = current_user.x, current_user.y
 
     user = User(
         h=h,
-        name=message.user.name,
-        year=message.user.year,
-        groups=message.user.groups,
-        greeting=message.user.greeting,
+        name=name,
+        year=year,
+        groups=groups,
+        greeting=greeting,
         avatar=current_user.avatar if current_user else "",
         x=x,
         y=y,
     )
-    room_user_store.upsert(user)
-    await send_message_all(ctx, UpdatedCommand(user=user.model_dump()))
+    us.upsert(user)
+    await send_message_all(UpdatedCommand(user=user))
 
 
-async def handle_mute(
-    ctx: RoomContext, h: str, message: MuteMessageInput, room_user_store
-):
-    logger.info(f"MUTE - {room_user_store.get_name(h)}: mute={message.mute}")
-    ctx.set_mute(h, message.mute)
-    await send_message_others(ctx, h, MutedCommand(h=h, mute=message.mute))
+@validate_call
+async def _handle_mute(h: str, mute: StrictBool) -> None:
+    logger.info(f"MUTE - {us.get_name(h)}: mute={mute}")
+    set_mute(h, mute)
+    await send_message_others(h, MutedCommand(h=h, mute=mute))
 
 
-def register(ctx: RoomContext):
+async def _handle_join(h: str, room_position_store: PositionStore) -> None:
+    move = room_position_store.new_user(h)
+    us.set_position(h, move.x, move.y)
+
+    users = [
+        user
+        for session_h in room_position_store.list_user_ids()
+        if (user := us.get(session_h)) is not None
+    ]
+
+    if not any(user.h == h for user in users):
+        pos = room_position_store.get_position(h) or (move.x, move.y)
+        users.append(User(h=h, x=pos[0], y=pos[1]))
+
+    await send_message(
+        h, InitCommand(users=users, map=room_position_store.get_map_meta())
+    )
+
+    if user := us.get(h):
+        await send_message_others(h, JoinedCommand(user=user))
+
+    connects(
+        connection_service.get_current_islands(room_position_store.get_all_positions())
+    )
+
+
+async def _handle_leave(h: str, room_position_store: PositionStore) -> None:
+    room_position_store.remove_user(h)
+    connects(
+        connection_service.get_current_islands(room_position_store.get_all_positions())
+    )
+    await send_message_all(LeftCommand(h=h))
+
+
+def register() -> None:
     """@on_message / @on_join / @on_leave ハンドラーを登録する。
 
     モジュールインポート時の副作用を排除するため、明示的な呼び出しが必要。
     lifespan 起動時と pytest conftest.py から呼ばれる。
     """
 
-    room_position_store = ctx.position_store or position_store
-    room_connection_service = ctx.connection_service or connection_service
-    room_user_store = ctx.user_store or us
-
-    @on_message(ctx)
-    async def _(h: str, message: dict):
-        match message.get("command"):
+    @on_message()
+    async def _(h: str, message: dict) -> None:
+        match message["command"]:
             case GuestCommand.MOVE:
-                validated = _validate_message(
-                    MoveMessageInput,
-                    message,
-                    "Invalid move data",
-                )
-                await handle_move(
-                    ctx,
-                    h,
-                    validated,
-                    room_position_store,
-                    room_connection_service,
-                    room_user_store,
-                )
+                await _handle_move(h, x=message["x"], y=message["y"])
             case GuestCommand.UPDATE:
-                validated = _validate_message(
-                    UpdateMessageInput,
-                    message,
-                    "Invalid user data",
-                )
-                await handle_update(
-                    ctx,
+                user = message["user"]
+                await _handle_update(
                     h,
-                    validated,
-                    room_position_store,
-                    room_user_store,
+                    user_h=user["h"],
+                    name=user["name"],
+                    year=user["year"],
+                    groups=user["groups"],
+                    greeting=user.get("greeting", ""),
                 )
             case GuestCommand.MUTE:
-                validated = _validate_message(
-                    MuteMessageInput,
-                    message,
-                    "Invalid mute data",
-                )
-                await handle_mute(ctx, h, validated, room_user_store)
+                await _handle_mute(h, mute=message["mute"])
             case _:
                 raise NotImplementedError("on_message handler is not implemented")
 
-    @on_join(ctx)
-    async def _(h: str):
-        move = room_position_store.new_user(h)
-        room_user_store.set_position(h, move.x, move.y)
+    @on_join()
+    async def _(h: str) -> None:
+        await _handle_join(h, position_store)
 
-        # 全ユーザーリスト（座標込み）を構築
-        users = []
-        for session_h in room_position_store.list_user_ids():
-            user = room_user_store.get(session_h)
-            if user:
-                users.append(user.model_dump())
-
-        # 自分自身がリストに含まれていない場合（us に未登録など）でも必ず追加する
-        if not any(u["h"] == h for u in users):
-            pos = room_position_store.get_position(h) or (move.x, move.y)
-            users.append(User(h=h, x=pos[0], y=pos[1]).model_dump())
-
-        # 新規ユーザーに INIT 送信
-        await send_message(
-            ctx,
-            h,
-            InitCommand(users=users, map=room_position_store.get_map_meta()),
-        )
-
-        # 既存ユーザーへ JOIN ブロードキャスト
-        user = room_user_store.get(h)
-        if user:
-            await send_message_others(ctx, h, JoinedCommand(user=user.model_dump()))
-
-        ctx.connects(
-            room_connection_service.get_current_islands(
-                room_position_store.get_all_positions()
-            )
-        )
-
-    @on_leave(ctx)
-    async def _(h: str):
-        room_position_store.remove_user(h)
-        ctx.connects(
-            room_connection_service.get_current_islands(
-                room_position_store.get_all_positions()
-            )
-        )
-        await send_message_all(ctx, LeftCommand(h=h))
+    @on_leave()
+    async def _(h: str) -> None:
+        await _handle_leave(h, position_store)

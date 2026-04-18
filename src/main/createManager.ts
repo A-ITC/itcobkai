@@ -6,7 +6,7 @@ export interface ManagerPort {
   start(canvas: HTMLCanvasElement, audio: HTMLAudioElement, lkToken: string): Promise<void>;
   end(): Promise<void>;
   mute(): void;
-  onKeyDown(e: KeyboardEvent): void;
+  moveBy(dx: number, dy: number): void;
   onResize(): void;
   onUpdate: (users: { [key: string]: User }) => void;
   onUpdateMap: (area: boolean[][]) => void;

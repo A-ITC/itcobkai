@@ -5,6 +5,14 @@ import MainView, { Tab } from "./MainView";
 import MapCreator from "./MapCreator";
 import { createManager } from "./createManager";
 
+function directionFromKey(key: string): [number, number] | undefined {
+  if (key === "a" || key === "ArrowLeft") return [-1, 0];
+  if (key === "w" || key === "ArrowUp") return [0, -1];
+  if (key === "s" || key === "ArrowDown") return [0, 1];
+  if (key === "d" || key === "ArrowRight") return [1, 0];
+  return undefined;
+}
+
 export default function Main() {
   const [users, setUsers] = createSignal<{ [key: string]: User }>({});
   const [connected, setConnected] = createSignal(false);
@@ -64,6 +72,12 @@ export default function Main() {
     manager.mute();
   }
 
+  function handleCanvasKeyDown(e: KeyboardEvent) {
+    const direction = directionFromKey(e.key);
+    if (!direction) return;
+    manager.moveBy(direction[0], direction[1]);
+  }
+
   manager.onUpdate = users => {
     setUsers({ ...users });
   };
@@ -86,7 +100,7 @@ export default function Main() {
       connectButton={connectButton}
       leaveButton={leaveButton}
       muteButton={muteButton}
-      onCanvasKeyDown={e => manager.onKeyDown(e)}
+      onCanvasKeyDown={handleCanvasKeyDown}
       setCanvasRef={element => {
         canvasRef = element;
       }}

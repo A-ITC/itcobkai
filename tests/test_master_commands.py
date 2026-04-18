@@ -11,9 +11,9 @@ send_raw_message はモックするため LiveKit サーバー接続不要。
 import json
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-
+from pydantic import ValidationError
 from api.rtc.adapter import GuestCommand
-from api.master.user import User, us
+from api.master.user import us
 from api.master.position_store import position_store
 from tests.conftest import make_test_user
 
@@ -59,11 +59,16 @@ class TestOnMessageMove:
         assert mock_mapper.user_positions.get(HA) == original_pos
 
     async def test_move_rejects_non_integer_coordinates(self, handlers):
-        """MOVE コマンドは数値以外の座標を ValueError で拒否する"""
-        with pytest.raises(ValueError, match="Invalid move data"):
+        """MOVE コマンドは数値以外の座標を ValidationError で拒否する"""
+        with pytest.raises(ValidationError):
             await handlers.on_message(
                 HA, {"command": GuestCommand.MOVE, "x": "3", "y": 2}
             )
+
+    async def test_move_requires_json_object_message(self, handlers):
+        """dict 以外の message は TypeError"""
+        with pytest.raises(TypeError):
+            await handlers.on_message(HA, "not-a-json-object")
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +158,21 @@ class TestOnMessageUpdate:
                 },
             )
 
+    async def test_update_requires_user_hash_key(self, handlers):
+        """UPDATE の必須キー欠落は KeyError"""
+        with pytest.raises(KeyError, match="h"):
+            await handlers.on_message(
+                HA,
+                {
+                    "command": GuestCommand.UPDATE,
+                    "user": {
+                        "name": "Missing Hash",
+                        "year": 1,
+                        "groups": [],
+                    },
+                },
+            )
+
     async def test_update_broadcasts_host_update_to_all(
         self, mock_mapper, room_context, handlers
     ):
@@ -163,7 +183,7 @@ class TestOnMessageUpdate:
 
         sent_messages: list[dict] = []
 
-        async def capture(ctx, user: str, data: bytes):
+        async def capture(user: str, data: bytes):
             sent_messages.append({"to": user, "msg": json.loads(data)})
 
         with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
@@ -225,7 +245,7 @@ class TestOnMessageMute:
 
         sent_messages: list[dict] = []
 
-        async def capture(ctx, user: str, data: bytes):
+        async def capture(user: str, data: bytes):
             sent_messages.append({"to": user, "msg": json.loads(data)})
 
         with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
@@ -241,11 +261,16 @@ class TestOnMessageMute:
             assert m["msg"]["mute"] is True
 
     async def test_mute_rejects_non_boolean_value(self, handlers):
-        """MUTE コマンドは boolean 以外の mute 値を ValueError で拒否する"""
-        with pytest.raises(ValueError, match="Invalid mute data"):
+        """MUTE コマンドは boolean 以外の mute 値を ValidationError で拒否する"""
+        with pytest.raises(ValidationError):
             await handlers.on_message(
                 HA, {"command": GuestCommand.MUTE, "mute": "false"}
             )
+
+    async def test_mute_requires_key(self, handlers):
+        """MUTE の必須キー欠落は KeyError"""
+        with pytest.raises(KeyError, match="mute"):
+            await handlers.on_message(HA, {"command": GuestCommand.MUTE})
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +317,7 @@ class TestOnJoin:
 
         sent_messages: list[dict] = []
 
-        async def capture_raw(ctx, user: str, message: dict):
+        async def capture_raw(user: str, message: dict):
             sent_messages.append({"to": user, "msg": message})
 
         with (
@@ -319,7 +344,7 @@ class TestOnJoin:
 
         sent_messages: list[dict] = []
 
-        async def capture_bytes(ctx, user: str, data: bytes):
+        async def capture_bytes(user: str, data: bytes):
             sent_messages.append({"to": user, "msg": json.loads(data)})
 
         with (
@@ -362,7 +387,7 @@ class TestOnLeave:
 
         sent_messages: list[dict] = []
 
-        async def capture(ctx, user: str, data: bytes):
+        async def capture(user: str, data: bytes):
             sent_messages.append({"to": user, "msg": json.loads(data)})
 
         with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):

@@ -239,8 +239,8 @@ async def audio_rooms(livekit_domain, mock_mapper, room_context):
     us._users[HA] = make_test_user(HA, "Audio User A")
     us._users[HB] = make_test_user(HB, "Audio User B")
 
-    await init_room(room_context, HA)
-    await init_room(room_context, HB)
+    await init_room(HA)
+    await init_room(HB)
 
     pa = _AudioTestParticipant(HA)
     pb = _AudioTestParticipant(HB)
@@ -252,7 +252,7 @@ async def audio_rooms(livekit_domain, mock_mapper, room_context):
     await pb.wait_for_command("INIT", timeout=15.0)
 
     # mixing_loop をバックグラウンドで起動
-    mixing_task = asyncio.create_task(mixing_loop(room_context))
+    mixing_task = asyncio.create_task(mixing_loop())
 
     yield pa, pb, room_context
 

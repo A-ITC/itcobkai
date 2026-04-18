@@ -20,7 +20,7 @@ class User(BaseModel):
 
 
 class UserUpdateInput(BaseModel):
-    """GuestCommand.UPDATE のバリデーション用（WebSocket経由）"""
+    """GuestCommand.UPDATE のバリデーション用"""
 
     h: str = Field(..., max_length=40)
     name: str = Field(..., min_length=1, max_length=40)
@@ -32,25 +32,25 @@ class UserUpdateInput(BaseModel):
 class UserStore:
     def __init__(self):
         self._users: dict[str, "User"] = {}
-        self._save_task: "asyncio.Task | None" = None
+        self._save_task: asyncio.Task[None] | None = None
 
-    def upsert(self, user: "User"):
+    def upsert(self, user: "User") -> None:
         self._users[user.h] = user
         self._schedule_save()
 
-    def _schedule_save(self):
+    def _schedule_save(self) -> None:
         if self._save_task is None or self._save_task.done():
             try:
                 loop = asyncio.get_running_loop()
                 self._save_task = loop.create_task(self._delayed_flush())
             except RuntimeError:
-                self.flush()
+                self._flush()
 
-    async def _delayed_flush(self):
+    async def _delayed_flush(self) -> None:
         await asyncio.sleep(5)
-        self.flush()
+        self._flush()
 
-    def flush(self):
+    def _flush(self) -> None:
         """積み上がった変更をすぐにファイルへ書き込む（一時ファイル経由でアトミックに置換）"""
         if self._save_task and not self._save_task.done():
             self._save_task.cancel()
@@ -70,9 +70,8 @@ class UserStore:
         user = self._users.get(h)
         return user.name if user else h
 
-    def set_position(self, h: str, x: int, y: int):
-        user = self._users.get(h)
-        if user:
+    def set_position(self, h: str, x: int, y: int) -> None:
+        if user := self._users.get(h):
             user.x = x
             user.y = y
 
@@ -80,7 +79,7 @@ class UserStore:
         """登録済みユーザーを全件返す"""
         return list(self._users.values())
 
-    def load(self):
+    def load(self) -> None:
         """data/users.json からユーザーデータを読み込む"""
         with open(USERS_JSON) as f:
             users = load(f)

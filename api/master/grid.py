@@ -16,15 +16,10 @@ class PreparedMap:
     height: int
 
 
-def parse_grid(raw: str) -> list[list[bool]]:
-    """CSV形式の文字列をboolグリッドに変換する"""
-    return [[char == "1" for char in row] for row in raw.split(",")]
-
-
 def prepare_map(meta: MapMeta) -> PreparedMap:
     """MapMeta からマップの実行時データを構築する"""
-    area = parse_grid(meta.red)
-    noentry = parse_grid(meta.black)
+    area = [[char == "1" for char in row] for row in meta.red.split(",")]
+    noentry = [[char == "1" for char in row] for row in meta.black.split(",")]
     height = len(area)
     width = len(area[0]) if height > 0 else 0
 

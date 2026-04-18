@@ -1,7 +1,7 @@
 from hashlib import blake2b
 
 
-def id62(num):
+def id62(num: int) -> str:
     uid = ""
     A = [chr(i) for i in [*range(48, 58), *range(65, 91), *range(97, 123)]]
     while num:
@@ -10,9 +10,9 @@ def id62(num):
     return uid
 
 
-def id7(num):
+def id7(num: int) -> str:
     return id62(int(blake2b(str(num).encode(), digest_size=5).hexdigest(), 16))
 
 
-def blake(text):
+def blake(text: str) -> str:
     return id62(int(blake2b(text.encode(), digest_size=9).hexdigest(), 16))

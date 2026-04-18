@@ -1,9 +1,11 @@
 from json import JSONDecodeError, loads
 from .state import (
-    RoomContext,
     SAMPLE_RATE,
     NUM_CHANNELS,
     UserSession,
+    active_sessions,
+    audio_tasks,
+    handler,
 )
 from .mixer import process_user_audio
 from typing import cast
@@ -38,6 +40,13 @@ from ..master.user import us
 from ..utils.config import APP_NAME, DOMAIN, SECRET_KEY
 
 logger = getLogger(__name__)
+
+
+async def _run_message_handler(identity: str, message: object) -> None:
+    try:
+        await handler.on_message(identity, message)
+    except Exception:
+        logger.exception("on_message handler failed for %s", identity)
 
 
 class _LkApi:
@@ -89,7 +98,7 @@ def create_token(identity: str, room_name: str) -> str:
     return token.to_jwt()
 
 
-async def init_room(ctx: RoomContext, name: str):
+async def init_room(name: str):
     """
     ルームを初期化する
     - 既存ルームがあれば削除して完全にリセット
@@ -110,11 +119,11 @@ async def init_room(ctx: RoomContext, name: str):
         await lkapi.room.create_room(CreateRoomRequest(name=name))
 
         # ボットがルームに接続完了してから返す（ユーザー接続前にボットが確実に存在するようにする）
-        await _setup_bot_in_room(ctx, name, name)
+        await _setup_bot_in_room(name, name)
     return {"token": create_token(name, name)}
 
 
-async def _setup_bot_in_room(ctx: RoomContext, room_name: str, username: str):
+async def _setup_bot_in_room(room_name: str, username: str):
     room = Room()
     source = AudioSource(SAMPLE_RATE, NUM_CHANNELS)
     session = UserSession(username=username, room=room, audio_source=source)
@@ -126,29 +135,29 @@ async def _setup_bot_in_room(ctx: RoomContext, room_name: str, username: str):
         participant: RemoteParticipant,
     ):
         if track.kind == TrackKind.KIND_AUDIO:
-            task = create_task(process_user_audio(session, track, ctx))
-            ctx.audio_tasks.add(task)
+            task = create_task(process_user_audio(session, track))
+            audio_tasks.add(task)
 
     @room.on("data_received")
     def on_data(data: DataPacket):
         if data.participant:
             try:
                 msg = loads(data.data.decode())
-                create_task(ctx.handlers.on_message(data.participant.identity, msg))
+                create_task(_run_message_handler(data.participant.identity, msg))
             except (JSONDecodeError, UnicodeDecodeError):
                 pass
 
     @room.on("participant_connected")
     def on_participant_connected(participant: RemoteParticipant):
         logger.info(f"JOIN - {us.get_name(participant.identity)}")
-        create_task(ctx.handlers.on_join(participant.identity))
+        create_task(handler.on_join(participant.identity))
 
     @room.on("participant_disconnected")
     def on_participant_disconnected(participant: RemoteParticipant):
         logger.info(f"LEAVE - {us.get_name(participant.identity)}")
-        if s := ctx.active_sessions.pop(participant.identity, None):
+        if s := active_sessions.pop(participant.identity, None):
             create_task(s.room.disconnect())
-        create_task(ctx.handlers.on_leave(participant.identity))
+        create_task(handler.on_leave(participant.identity))
 
     bot_token = create_token("python-bot", room_name)
     try:
@@ -163,4 +172,4 @@ async def _setup_bot_in_room(ctx: RoomContext, room_name: str, username: str):
 
     # Botがルームへの参加とトラック公開を完了してからセッションを登録する
     # （接続完了前に send_message が呼ばれても空振りになるよう invariant を保証する）
-    ctx.active_sessions[username] = session
+    active_sessions[username] = session

@@ -15,7 +15,7 @@ const { mockRequest, mockManager, mockCreateManager } = vi.hoisted(() => {
     start: vi.fn().mockResolvedValue(undefined),
     end: vi.fn().mockResolvedValue(undefined),
     mute: vi.fn(),
-    onKeyDown: vi.fn(),
+    moveBy: vi.fn(),
     onResize: vi.fn(),
     onUpdate: undefined as ((users: { [key: string]: User }) => void) | undefined,
     onUpdateMap: undefined as ((area: boolean[][]) => void) | undefined,
@@ -125,5 +125,15 @@ describe("Viewer / Container wiring", () => {
     });
 
     await screen.findByText("Alice");
+  });
+
+  it("キャンバスのキーボード操作を moveBy に変換する", async () => {
+    render(() => <Viewer />);
+
+    const canvas = document.querySelector("canvas");
+    expect(canvas).not.toBeNull();
+    canvas!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+
+    expect(mockManager.moveBy).toHaveBeenCalledWith(-1, 0);
   });
 });

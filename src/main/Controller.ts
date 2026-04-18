@@ -1,26 +1,21 @@
 import { GuestCommand, GuestMessage, MapRaw, User } from "../common/Schema";
 import { ticker } from "../common/Common";
+import AvatarLoader from "./AvatarLoader";
 import MapCreator from "./MapCreator";
 import Cropper from "./Cropper";
+import RenderQueue from "./RenderQueue";
 
 export default class Controller {
   public canvas: HTMLCanvasElement = document.createElement("canvas");
   private mc = new MapCreator();
   private cropper = new Cropper(this.mc.map, 0, 0);
+  private avatarLoader = new AvatarLoader();
+  private renderQueue = new RenderQueue(async () => this.renderFrame());
   private message = (_data: GuestMessage) => {};
   private inThrottle = false;
   private previousPosition = { x: 0, y: 0 };
   private users: { [key: string]: User } = {};
   private player: User | undefined;
-  private drawing = false;
-  private drawQueued = false;
-
-  public onKeyDown(e: KeyboardEvent) {
-    if (e.key === "a" || e.key === "ArrowLeft") this.move(-1, 0);
-    else if (e.key === "w" || e.key === "ArrowUp") this.move(0, -1);
-    else if (e.key === "s" || e.key === "ArrowDown") this.move(0, 1);
-    else if (e.key === "d" || e.key === "ArrowRight") this.move(1, 0);
-  }
 
   public onResize() {
     this.mc.resize();
@@ -34,9 +29,11 @@ export default class Controller {
     this.message = message;
     this.canvas = canvas;
     this.mc = new MapCreator();
+    this.avatarLoader = new AvatarLoader();
     // canvasRef を mc に設定しておくことで、newMap前のresizeでも実canvasにサイズが反映される
     this.mc.setCanvas(canvas);
     this.cropper = new Cropper(this.mc.map, 0, 0);
+    this.renderQueue = new RenderQueue(async () => this.renderFrame());
     ticker.move = () => {
       // 位置が変わっていたらサーバーに送信
       const now = this.cropper.get();
@@ -64,7 +61,7 @@ export default class Controller {
     this.refresh();
   }
 
-  private move(dx: number, dy: number) {
+  public moveBy(dx: number, dy: number): boolean {
     if (this.inThrottle) return false;
     this.inThrottle = true;
     setTimeout(() => (this.inThrottle = false), 100);
@@ -74,24 +71,12 @@ export default class Controller {
       this.player.x = x;
       this.player.y = y;
     }
-    this.refresh();
+    void this.refresh();
+    return true;
   }
 
   public async refresh() {
-    if (this.drawing) {
-      this.drawQueued = true;
-      return;
-    }
-    this.drawing = true;
-    do {
-      this.drawQueued = false;
-      const { top, left } = this.cropper.get();
-      const allUsers: User[] = Object.values(this.users).filter(u => !this.player || u.h !== this.player.h);
-      if (this.player) allUsers.push(this.player);
-      await this.mc.preloadAvatars(allUsers);
-      this.mc.draw(allUsers, left, top);
-    } while (this.drawQueued);
-    this.drawing = false;
+    return this.renderQueue.schedule();
   }
 
   // サーバが確定した位置にCropperをジャンプ（初期配置など thisPlayerがない場合のみ）
@@ -104,5 +89,13 @@ export default class Controller {
 
   public destroy() {
     delete ticker.move;
+  }
+
+  private async renderFrame() {
+    const { top, left } = this.cropper.get();
+    const allUsers: User[] = Object.values(this.users).filter(u => !this.player || u.h !== this.player.h);
+    if (this.player) allUsers.push(this.player);
+    await this.avatarLoader.preload(allUsers);
+    this.mc.draw(allUsers, left, top, user => this.avatarLoader.get(user));
   }
 }

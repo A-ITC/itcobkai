@@ -138,8 +138,8 @@ async def two_participants(livekit_domain, mock_mapper, room_context):
     us._users[HB] = make_test_user(HB, "User B")
 
     # ルーム+ボット初期化
-    await init_room(room_context, HA)
-    await init_room(room_context, HB)
+    await init_room(HA)
+    await init_room(HB)
 
     pa = _TestParticipant(HA)
     pb = _TestParticipant(HB)
@@ -178,7 +178,7 @@ async def test_lk_init_received_on_join(livekit_domain, mock_mapper, room_contex
     """ユーザーが参加すると HostCommand.INIT を受け取る"""
     us._users[HA] = make_test_user(HA)
 
-    await init_room(room_context, HA)
+    await init_room(HA)
     pa = _TestParticipant(HA)
     await pa.connect()
 
@@ -208,8 +208,8 @@ async def test_lk_join_broadcast_when_new_user_connects(
     us._users[HA] = make_test_user(HA, "User A")
     us._users[HB] = make_test_user(HB, "User B")
 
-    await init_room(room_context, HA)
-    await init_room(room_context, HB)
+    await init_room(HA)
+    await init_room(HB)
 
     pa = _TestParticipant(HA)
     await pa.connect()
@@ -356,8 +356,8 @@ async def test_lk_leave_broadcasts_to_remaining_users(
     us._users[HA] = make_test_user(HA, "User A")
     us._users[HB] = make_test_user(HB, "User B")
 
-    await init_room(room_context, HA)
-    await init_room(room_context, HB)
+    await init_room(HA)
+    await init_room(HB)
 
     pa = _TestParticipant(HA)
     pb = _TestParticipant(HB)

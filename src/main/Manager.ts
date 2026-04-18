@@ -31,8 +31,8 @@ export default class Manager {
     });
   }
 
-  public onKeyDown(e: KeyboardEvent) {
-    this.mc.onKeyDown(e);
+  public moveBy(dx: number, dy: number) {
+    this.mc.moveBy(dx, dy);
   }
 
   public onResize() {

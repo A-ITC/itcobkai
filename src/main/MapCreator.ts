@@ -6,7 +6,6 @@ export default class MapCreator {
   private canvas = document.createElement("canvas");
   private ctx: CanvasRenderingContext2D;
   public map: Map = { area: [], noentry: [], topImage: new Image(), bottomImage: new Image(), width: 0, height: 0 };
-  public avatars: { [key: string]: HTMLImageElement } = {};
 
   constructor() {
     this.ctx = this.canvas.getContext("2d")!;
@@ -29,24 +28,11 @@ export default class MapCreator {
     this.map = await this.loadMap(mapraw);
   }
 
-  public async preloadAvatars(users: User[]): Promise<void> {
-    await Promise.all(
-      users.map(async user => {
-        const avatarUrl = user.avatar ? `${IMAGE_URL}/${user.avatar}` : "";
-        if (!this.avatars[user.h] || (!!avatarUrl && !this.avatars[user.h].src.endsWith(avatarUrl))) {
-          const img = new Image();
-          await loadImage(avatarUrl, img);
-          this.avatars[user.h] = img;
-        }
-      })
-    );
-  }
-
-  public draw(users: User[], left: number, top: number) {
+  public draw(users: User[], left: number, top: number, getAvatar: (user: User) => HTMLImageElement | undefined) {
     // 描画
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.drawBottom(left, top);
-    this.drawUsers(users, left, top);
+    this.drawUsers(users, left, top, getAvatar);
     this.drawTop(left, top);
   }
 
@@ -69,21 +55,19 @@ export default class MapCreator {
     return map;
   }
 
-  private drawUsers(users: User[], left: number, top: number) {
+  private drawUsers(users: User[], left: number, top: number, getAvatar: (user: User) => HTMLImageElement | undefined) {
     for (const user of users) {
       const i = user.x - left;
       const j = user.y - top;
       if (i < 0 || storage.outer <= i) continue;
       if (j < 0 || storage.outer <= j) continue;
-      this.drawUser(user, i, j);
+      this.drawUser(user, i, j, getAvatar(user));
     }
   }
 
-  private drawUser(user: User, i: number, j: number) {
+  private drawUser(user: User, i: number, j: number, avatar: HTMLImageElement | undefined) {
     const grid = this.canvas.width / storage.outer;
-    const avatarUrl = user.avatar ? `${IMAGE_URL}/${user.avatar}` : "";
-    const avatar = this.avatars[user.h];
-    if (!avatar || (!!avatarUrl && !avatar.src.endsWith(avatarUrl))) return; // 未キャッシュはスキップ（preloadAvatars済みなら発生しない）
+    if (!avatar) return;
     this.ctx.beginPath();
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
     this.ctx.save();
@@ -170,9 +154,9 @@ export default class MapCreator {
     if (this.canvas.height !== size) this.canvas.height = size;
   }
 
-  public touchAction(move: Function) {
+  public touchAction(move: (dx: number, dy: number) => void) {
     let touching = false;
-    let direction = [0, 0];
+    let direction: [number, number] = [0, 0];
 
     function touched(e: TouchEvent) {
       touching = false;

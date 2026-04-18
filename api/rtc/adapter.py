@@ -1,9 +1,20 @@
+from collections.abc import Callable
 from json import dumps
 from enum import StrEnum, auto
-from .state import RoomContext, send_raw_message, send_raw_message_bytes
+from typing import TypeVar
+
+from .state import (
+    MessageHandler,
+    PresenceHandler,
+    active_sessions,
+    handler,
+    send_raw_message,
+    send_raw_message_bytes,
+)
 from asyncio import gather
 from pydantic import BaseModel, Field
 from ..utils.schema import MapMeta, Move
+from ..master.user import User
 
 
 class HostCommand(StrEnum):
@@ -40,7 +51,7 @@ class AlertCommand(Command):
 
 class JoinedCommand(Command):
     command: HostCommand = Field(default=HostCommand.JOINED, init=False)
-    user: dict
+    user: User
 
 
 class MovedCommand(Command):
@@ -50,7 +61,7 @@ class MovedCommand(Command):
 
 class UpdatedCommand(Command):
     command: HostCommand = Field(default=HostCommand.UPDATED, init=False)
-    user: dict
+    user: User
 
 
 class LeftCommand(Command):
@@ -60,7 +71,7 @@ class LeftCommand(Command):
 
 class InitCommand(Command):
     command: HostCommand = Field(default=HostCommand.INIT, init=False)
-    users: list[dict]
+    users: list[User]
     map: MapMeta
 
 
@@ -80,26 +91,23 @@ class MutedCommand(Command):
 # ---------------------------------------------------------------------------
 
 
-async def send_message(ctx: RoomContext, h: str, payload: Command):
-    await send_raw_message(ctx, h, payload.model_dump())
+async def send_message(h: str, payload: Command):
+    await send_raw_message(h, payload.model_dump())
 
 
-async def send_message_all(ctx: RoomContext, payload: Command):
+async def send_message_all(payload: Command):
     data = dumps(payload.model_dump()).encode("utf-8")
     await gather(
-        *[
-            send_raw_message_bytes(ctx, h, data)
-            for h in list(ctx.active_sessions.keys())
-        ]
+        *[send_raw_message_bytes(h, data) for h in list(active_sessions.keys())]
     )
 
 
-async def send_message_others(ctx: RoomContext, sender_h: str, payload: Command):
+async def send_message_others(sender_h: str, payload: Command):
     data = dumps(payload.model_dump()).encode("utf-8")
     await gather(
         *[
-            send_raw_message_bytes(ctx, h, data)
-            for h in list(ctx.active_sessions.keys())
+            send_raw_message_bytes(h, data)
+            for h in list(active_sessions.keys())
             if h != sender_h
         ]
     )
@@ -110,25 +118,29 @@ async def send_message_others(ctx: RoomContext, sender_h: str, payload: Command)
 # ---------------------------------------------------------------------------
 
 
-def on_message(ctx: RoomContext):
-    def decorator(func):
-        ctx.handlers.on_message = func
+MessageHandlerT = TypeVar("MessageHandlerT", bound=MessageHandler)
+PresenceHandlerT = TypeVar("PresenceHandlerT", bound=PresenceHandler)
+
+
+def on_message() -> Callable[[MessageHandlerT], MessageHandlerT]:
+    def decorator(func: MessageHandlerT) -> MessageHandlerT:
+        handler.on_message = func
         return func
 
     return decorator
 
 
-def on_join(ctx: RoomContext):
-    def decorator(func):
-        ctx.handlers.on_join = func
+def on_join() -> Callable[[PresenceHandlerT], PresenceHandlerT]:
+    def decorator(func: PresenceHandlerT) -> PresenceHandlerT:
+        handler.on_join = func
         return func
 
     return decorator
 
 
-def on_leave(ctx: RoomContext):
-    def decorator(func):
-        ctx.handlers.on_leave = func
+def on_leave() -> Callable[[PresenceHandlerT], PresenceHandlerT]:
+    def decorator(func: PresenceHandlerT) -> PresenceHandlerT:
+        handler.on_leave = func
         return func
 
     return decorator
