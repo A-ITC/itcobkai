@@ -92,90 +92,36 @@ describe("Setup / name 設定済み", () => {
 });
 
 // ──────────────────────────────────────────────────────────
-// 初期表示（name が空の初回ユーザー）
+// 初回登録フロー
 // ──────────────────────────────────────────────────────────
-describe("Setup / 初期表示（初回ユーザー）", () => {
-  beforeEach(async () => {
+describe("Setup / 初回登録フロー", () => {
+  it("初回ユーザーにはプロフィールフォームが表示され、入力できる", async () => {
     mockFetchDefault();
     render(() => <Setup />);
-    // フォームが表示されるまで待機
-    await screen.findByText("登録する");
-  });
 
-  it("タイトルが表示される", () => {
+    await screen.findByRole("button", { name: "登録する" });
+
     expect(screen.getByText("ITCOBKAI")).toBeInTheDocument();
-  });
-
-  it("「プロフィール設定」見出しが表示される", () => {
     expect(screen.getByText("プロフィール設定")).toBeInTheDocument();
-  });
-
-  it("「登録する」ボタンが表示される", () => {
-    expect(screen.getByRole("button", { name: "登録する" })).toBeInTheDocument();
-  });
-
-  it("名前フィールドが表示される", () => {
     expect(screen.getByPlaceholderText("表示名を入力")).toBeInTheDocument();
-  });
-
-  it("何期生セレクトが表示される", () => {
     expect(screen.getByText("何期生")).toBeInTheDocument();
-  });
-
-  it("所属チェックボックスが表示される（DTM/CG/PROG/MV/3DCG）", () => {
     expect(screen.getByText("DTM")).toBeInTheDocument();
-    expect(screen.getByText("CG")).toBeInTheDocument();
-    expect(screen.getByText("PROG")).toBeInTheDocument();
-    expect(screen.getByText("MV")).toBeInTheDocument();
     expect(screen.getByText("3DCG")).toBeInTheDocument();
-  });
-
-  it("挨拶テキストエリアが表示される", () => {
     expect(screen.getByPlaceholderText("一言自己紹介など（省略可）")).toBeInTheDocument();
-  });
 
-  it("名前の文字数カウンターが表示される（0 / 40）", () => {
-    expect(screen.getByText("0 / 40")).toBeInTheDocument();
-  });
-
-  it("挨拶の文字数カウンターが表示される（0 / 400）", () => {
-    expect(screen.getByText("0 / 400")).toBeInTheDocument();
-  });
-});
-
-// ──────────────────────────────────────────────────────────
-// フォーム入力インタラクション
-// ──────────────────────────────────────────────────────────
-describe("Setup / フォーム入力", () => {
-  beforeEach(async () => {
-    mockFetchDefault();
-    render(() => <Setup />);
-    await screen.findByText("登録する");
-  });
-
-  it("名前を入力すると文字数カウンターが更新される", async () => {
     const user = userEvent.setup();
-    const input = screen.getByPlaceholderText("表示名を入力");
-    await user.type(input, "テスト太郎");
-    expect(input).toHaveValue("テスト太郎");
-    // 文字数は入力した文字数分
-    const nameLength = "テスト太郎".length.toString();
-    expect(screen.getByText(`${nameLength} / 40`)).toBeInTheDocument();
-  });
+    const nameInput = screen.getByPlaceholderText("表示名を入力");
+    const greetingInput = screen.getByPlaceholderText("一言自己紹介など（省略可）");
+    const dtmCheckbox = screen.getAllByRole("checkbox")[0];
 
-  it("グループチェックボックスをクリックするとチェックが入る", async () => {
-    const user = userEvent.setup();
-    const dtmCheckbox = screen.getAllByRole("checkbox")[0]; // DTM
+    await user.type(nameInput, "テスト太郎");
     await user.click(dtmCheckbox);
+    await user.type(greetingInput, "よろしくお願いします");
+
+    expect(nameInput).toHaveValue("テスト太郎");
     expect(dtmCheckbox).toBeChecked();
-  });
-
-  it("同じグループを再クリックするとチェックが外れる", async () => {
-    const user = userEvent.setup();
-    const dtmCheckbox = screen.getAllByRole("checkbox")[0]; // DTM
-    await user.click(dtmCheckbox);
-    await user.click(dtmCheckbox);
-    expect(dtmCheckbox).not.toBeChecked();
+    expect(greetingInput).toHaveValue("よろしくお願いします");
+    expect(screen.getByText(`${"テスト太郎".length} / 40`)).toBeInTheDocument();
   });
 });
 

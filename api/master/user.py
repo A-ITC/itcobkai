@@ -19,16 +19,6 @@ class User(BaseModel):
     y: int = 0
 
 
-class UserUpdateInput(BaseModel):
-    """GuestCommand.UPDATE のバリデーション用"""
-
-    h: str = Field(..., max_length=40)
-    name: str = Field(..., min_length=1, max_length=40)
-    year: int = Field(..., ge=1, le=20)
-    groups: list[Literal["dtm", "cg", "prog", "mv", "3dcg"]]
-    greeting: str = Field("", max_length=400)
-
-
 class UserStore:
     def __init__(self):
         self._users: dict[str, "User"] = {}

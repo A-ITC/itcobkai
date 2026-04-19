@@ -127,13 +127,105 @@ describe("Viewer / Container wiring", () => {
     await screen.findByText("Alice");
   });
 
-  it("キャンバスのキーボード操作を moveBy に変換する", async () => {
+  it("manager.onUpdate の新しいスナップショットでユーザー一覧を置き換える", async () => {
     render(() => <Viewer />);
 
-    const canvas = document.querySelector("canvas");
-    expect(canvas).not.toBeNull();
-    canvas!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }));
+    mockManager.onUpdate?.({
+      u1: {
+        h: "u1",
+        name: "Alice",
+        year: 2,
+        groups: ["dtm"],
+        avatar: "avatar.png",
+        x: 0,
+        y: 0,
+        mute: false
+      }
+    });
+    await screen.findByText("Alice");
 
-    expect(mockManager.moveBy).toHaveBeenCalledWith(-1, 0);
+    mockManager.onUpdate?.({
+      u2: {
+        h: "u2",
+        name: "Bob",
+        year: 2,
+        groups: ["cg"],
+        avatar: "avatar.png",
+        x: 1,
+        y: 1,
+        mute: false
+      }
+    });
+
+    await screen.findByText("Bob");
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+  });
+
+  it("manager.onUpdate のミュート状態がユーザー一覧の表示に反映される", async () => {
+    render(() => <Viewer />);
+
+    mockManager.onUpdate?.({
+      u1: {
+        h: "u1",
+        name: "Muted User",
+        year: 2,
+        groups: ["dtm"],
+        avatar: "avatar.png",
+        x: 0,
+        y: 0,
+        mute: true
+      }
+    });
+
+    await screen.findByText("Muted User");
+    const dots = Array.from(document.querySelectorAll(".status-dot"));
+    expect(dots[0]).toHaveClass("bg-red-500");
+  });
+
+  it("接続後に map と users の更新を受けると接続中とオンラインの表示が分かれる", async () => {
+    render(() => <Viewer />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("接続"));
+    await screen.findByText("退席");
+
+    mockManager.onUpdateMap?.([[false, false, false, false, false, false]]);
+    mockManager.onUpdate?.({
+      "player-hash": {
+        h: "player-hash",
+        name: "Player",
+        year: 2,
+        groups: ["dtm"],
+        avatar: "avatar.png",
+        x: 0,
+        y: 0,
+        mute: false
+      },
+      near: {
+        h: "near",
+        name: "Near User",
+        year: 2,
+        groups: ["prog"],
+        avatar: "avatar.png",
+        x: 1,
+        y: 0,
+        mute: false
+      },
+      far: {
+        h: "far",
+        name: "Far User",
+        year: 2,
+        groups: ["cg"],
+        avatar: "avatar.png",
+        x: 5,
+        y: 0,
+        mute: false
+      }
+    });
+
+    await screen.findByText("Near User");
+    expect(screen.getByText("接続中")).toBeInTheDocument();
+    expect(screen.getByText("オンライン")).toBeInTheDocument();
+    expect(screen.getByText("Far User")).toBeInTheDocument();
   });
 });

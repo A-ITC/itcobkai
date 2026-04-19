@@ -19,8 +19,8 @@ from ..rtc.adapter import (
     on_leave,
 )
 from ..utils.schema import Move
-from .position_store import position_store
-from .position_store import PositionStore
+from .position import position_store
+from .position import PositionStore
 from .connection_service import connection_service
 
 logger = getLogger(__name__)

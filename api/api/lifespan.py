@@ -14,8 +14,8 @@ from ..master.user import us
 from ..master.grid import prepare_map
 from ..utils.logger import init_logger
 from ..master.master import register
-from ..master.map_repository import map_repository
-from ..master.position_store import position_store
+from ..master.map import map_repository
+from ..master.position import position_store
 from ..master.connection_service import connection_service
 
 logger = getLogger(__name__)

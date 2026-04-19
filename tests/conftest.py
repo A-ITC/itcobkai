@@ -40,7 +40,7 @@ from api.rtc.state import (
 from api.master.connection_service import connection_service
 from api.master.grid import prepare_map
 from api.master.user import User, UserStore, us
-from api.master.position_store import position_store
+from api.master.position import position_store
 from api.utils.schema import MapMeta
 
 

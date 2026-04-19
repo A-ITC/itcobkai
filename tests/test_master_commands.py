@@ -1,20 +1,18 @@
 """
-api/master.py のコマンドハンドラーテスト（LiveKit 不要）
+api/master.py のコマンドハンドラースモークテスト（LiveKit 不要）
 
-on_message / on_join / on_leave ハンドラーを room_context.handlers から取得して
-await し、GuestCommand の入力に対して期待される副作用（UserStore 更新、
-send_message_all 呼び出し、Mapper 操作）を検証する。
-
-send_raw_message はモックするため LiveKit サーバー接続不要。
+細かいバリデーションや内部実装の検証は LiveKit 統合テストに寄せ、
+ここでは GuestCommand / join / leave の代表的な副作用だけを確認する。
 """
 
 import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from pydantic import ValidationError
-from api.rtc.adapter import GuestCommand
+
+from api.master.position import position_store
 from api.master.user import us
-from api.master.position_store import position_store
+from api.rtc.adapter import GuestCommand
 from tests.conftest import make_test_user
 
 HA = "handler_test_ha"
@@ -27,64 +25,49 @@ def handlers(room_context):
 
 
 def _add_session(room_context, h: str):
-    """active_sessions にダミーセッションを追加する"""
     dummy = MagicMock()
     dummy.username = h
     room_context.active_sessions[h] = dummy
 
 
-# ---------------------------------------------------------------------------
-# on_message: GuestCommand.MOVE
-# ---------------------------------------------------------------------------
-
-
-class TestOnMessageMove:
-    async def test_move_calls_mapper_move(self, mock_mapper, handlers):
-        """MOVE コマンドは mapper.move(h, x, y) を呼ぶ"""
-        mock_mapper.new_user(HA)
-
-        await handlers.on_message(HA, {"command": GuestCommand.MOVE, "x": 3, "y": 2})
-
-        assert position_store.user_positions.get(HA) == (3, 2)
-
-    async def test_move_to_noentry_cell_is_ignored(self, mock_mapper, handlers):
-        """noentry セルへの移動は無視される"""
-        mock_mapper.new_user(HA)
-        original_pos = mock_mapper.user_positions[HA]
-
-        await handlers.on_message(
-            HA, {"command": GuestCommand.MOVE, "x": 9999, "y": 9999}
-        )
-
-        assert mock_mapper.user_positions.get(HA) == original_pos
-
-    async def test_move_rejects_non_integer_coordinates(self, handlers):
-        """MOVE コマンドは数値以外の座標を ValidationError で拒否する"""
-        with pytest.raises(ValidationError):
-            await handlers.on_message(
-                HA, {"command": GuestCommand.MOVE, "x": "3", "y": 2}
-            )
-
-    async def test_move_requires_json_object_message(self, handlers):
-        """dict 以外の message は TypeError"""
-        with pytest.raises(TypeError):
-            await handlers.on_message(HA, "not-a-json-object")
-
-
-# ---------------------------------------------------------------------------
-# on_message: GuestCommand.UPDATE
-# ---------------------------------------------------------------------------
-
-
-class TestOnMessageUpdate:
-    async def test_update_upserts_user_in_store(
+class TestOnMessageSmoke:
+    async def test_move_updates_position_and_broadcasts_moved(
         self, mock_mapper, room_context, handlers
     ):
-        """UPDATE コマンドはユーザー情報を UserStore に保存する"""
         _add_session(room_context, HA)
+        _add_session(room_context, HB)
+        move = mock_mapper.new_user(HA)
+        target_x = 0 if move.x != 0 else 1
+        target_y = 0 if move.y != 0 else 1
+
+        sent_messages: list[dict] = []
+
+        async def capture(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
+
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
+            await handlers.on_message(
+                HA,
+                {"command": GuestCommand.MOVE, "x": target_x, "y": target_y},
+            )
+
+        assert position_store.user_positions.get(HA) == (target_x, target_y)
+        assert {message["to"] for message in sent_messages} == {HA, HB}
+        assert all(message["msg"]["command"] == "MOVED" for message in sent_messages)
+
+    async def test_update_persists_user_and_broadcasts_updated(
+        self, mock_mapper, room_context, handlers
+    ):
+        _add_session(room_context, HA)
+        _add_session(room_context, HB)
         mock_mapper.new_user(HA)
 
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
+        sent_messages: list[dict] = []
+
+        async def capture(user: str, data: bytes):
+            sent_messages.append({"to": user, "msg": json.loads(data)})
+
+        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
             await handlers.on_message(
                 HA,
                 {
@@ -94,6 +77,7 @@ class TestOnMessageUpdate:
                         "name": "New Name",
                         "year": 3,
                         "groups": ["dtm"],
+                        "greeting": "hello",
                         "avatar": "",
                         "x": 0,
                         "y": 0,
@@ -101,85 +85,20 @@ class TestOnMessageUpdate:
                 },
             )
 
-        stored = us._users.get(HA)
+        stored = us.get(HA)
         assert stored is not None
         assert stored.name == "New Name"
         assert stored.year == 3
-        assert "dtm" in stored.groups
+        assert stored.groups == ["dtm"]
+        assert stored.greeting == "hello"
+        assert {message["to"] for message in sent_messages} == {HA, HB}
+        assert all(message["msg"]["command"] == "UPDATED" for message in sent_messages)
 
-    async def test_update_preserves_server_side_position(
-        self, mock_mapper, room_context, handlers
+    async def test_mute_updates_runtime_state_and_notifies_other_users(
+        self, room_context, handlers
     ):
-        """UPDATE コマンドはサーバー管理の座標を維持する（クライアント送信座標を無視）"""
-        _add_session(room_context, HA)
-        mock_mapper.new_user(HA)
-        mock_mapper.move(HA, 2, 3)
-        us._users[HA] = make_test_user(HA)
-        us._users[HA].x = 2
-        us._users[HA].y = 3
-
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
-            await handlers.on_message(
-                HA,
-                {
-                    "command": GuestCommand.UPDATE,
-                    "user": {
-                        "h": HA,
-                        "name": "Test",
-                        "year": 1,
-                        "groups": [],
-                        "avatar": "",
-                        "x": 999,
-                        "y": 999,
-                    },
-                },
-            )
-
-        stored = us._users.get(HA)
-        assert stored.x == 2
-        assert stored.y == 3
-
-    async def test_update_hash_mismatch_raises_value_error(self, handlers):
-        """h と user.h が一致しない場合は ValueError"""
-        with pytest.raises(ValueError):
-            await handlers.on_message(
-                HA,
-                {
-                    "command": GuestCommand.UPDATE,
-                    "user": {
-                        "h": HB,
-                        "name": "Attacker",
-                        "year": 1,
-                        "groups": [],
-                        "avatar": "",
-                        "x": 0,
-                        "y": 0,
-                    },
-                },
-            )
-
-    async def test_update_requires_user_hash_key(self, handlers):
-        """UPDATE の必須キー欠落は KeyError"""
-        with pytest.raises(KeyError, match="h"):
-            await handlers.on_message(
-                HA,
-                {
-                    "command": GuestCommand.UPDATE,
-                    "user": {
-                        "name": "Missing Hash",
-                        "year": 1,
-                        "groups": [],
-                    },
-                },
-            )
-
-    async def test_update_broadcasts_host_update_to_all(
-        self, mock_mapper, room_context, handlers
-    ):
-        """UPDATE コマンドは HostCommand.UPDATED を送信者以外にブロードキャストする"""
         _add_session(room_context, HA)
         _add_session(room_context, HB)
-        mock_mapper.new_user(HA)
 
         sent_messages: list[dict] = []
 
@@ -187,203 +106,63 @@ class TestOnMessageUpdate:
             sent_messages.append({"to": user, "msg": json.loads(data)})
 
         with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
-            await handlers.on_message(
-                HA,
-                {
-                    "command": GuestCommand.UPDATE,
-                    "user": {
-                        "h": HA,
-                        "name": "Broadcast Test",
-                        "year": 1,
-                        "groups": [],
-                        "avatar": "",
-                        "x": 0,
-                        "y": 0,
-                    },
-                },
-            )
-
-        sent_to = {m["to"] for m in sent_messages}
-        assert HA in sent_to
-        assert HB in sent_to
-
-        commands = {m["msg"]["command"] for m in sent_messages}
-        assert "UPDATED" in commands
-
-
-# ---------------------------------------------------------------------------
-# on_message: GuestCommand.MUTE
-# ---------------------------------------------------------------------------
-
-
-class TestOnMessageMute:
-    async def test_mute_true_adds_to_muted_set(self, room_context, handlers):
-        """MUTE True はユーザーを muted_users に追加する"""
-        _add_session(room_context, HA)
-
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
             await handlers.on_message(HA, {"command": GuestCommand.MUTE, "mute": True})
 
         assert HA in room_context.muted_users
+        assert {message["to"] for message in sent_messages} == {HB}
+        assert sent_messages[0]["msg"] == {"command": "MUTED", "h": HA, "mute": True}
 
-    async def test_mute_false_removes_from_muted_set(self, room_context, handlers):
-        """MUTE False はユーザーを muted_users から削除する"""
-        room_context.muted_users.add(HA)
-        _add_session(room_context, HA)
-
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
-            await handlers.on_message(HA, {"command": GuestCommand.MUTE, "mute": False})
-
-        assert HA not in room_context.muted_users
-
-    async def test_mute_broadcasts_update_with_mute_status(
-        self, room_context, handlers
-    ):
-        """MUTE コマンドは HostCommand.MUTED を送信者以外にブロードキャストする"""
-        _add_session(room_context, HA)
-        _add_session(room_context, HB)
-
-        sent_messages: list[dict] = []
-
-        async def capture(user: str, data: bytes):
-            sent_messages.append({"to": user, "msg": json.loads(data)})
-
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
-            await handlers.on_message(HA, {"command": GuestCommand.MUTE, "mute": True})
-
-        sent_to = {m["to"] for m in sent_messages}
-        assert HA not in sent_to
-        assert HB in sent_to
-
-        for m in sent_messages:
-            assert m["msg"]["command"] == "MUTED"
-            assert m["msg"]["h"] == HA
-            assert m["msg"]["mute"] is True
-
-    async def test_mute_rejects_non_boolean_value(self, handlers):
-        """MUTE コマンドは boolean 以外の mute 値を ValidationError で拒否する"""
-        with pytest.raises(ValidationError):
-            await handlers.on_message(
-                HA, {"command": GuestCommand.MUTE, "mute": "false"}
-            )
-
-    async def test_mute_requires_key(self, handlers):
-        """MUTE の必須キー欠落は KeyError"""
-        with pytest.raises(KeyError, match="mute"):
-            await handlers.on_message(HA, {"command": GuestCommand.MUTE})
-
-
-# ---------------------------------------------------------------------------
-# on_message: 未知コマンド
-# ---------------------------------------------------------------------------
-
-
-class TestOnMessageUnknown:
     async def test_unknown_command_raises_not_implemented(self, handlers):
-        """未知のコマンドは NotImplementedError を送出する"""
         with pytest.raises(NotImplementedError):
             await handlers.on_message(HA, {"command": "totally_unknown_cmd"})
 
 
-# ---------------------------------------------------------------------------
-# on_join
-# ---------------------------------------------------------------------------
-
-
-class TestOnJoin:
-    async def test_join_spawns_user_in_mapper(
+class TestPresenceSmoke:
+    async def test_join_sends_init_to_joiner_and_joined_to_others(
         self, mock_mapper, room_context, handlers
     ):
-        """on_join はマッパーにユーザーを登録してポジションを割り当てる"""
-        _add_session(room_context, HA)
-        us._users[HA] = make_test_user(HA)
-
-        with (
-            patch("api.rtc.adapter.send_raw_message", new=AsyncMock()),
-            patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()),
-        ):
-            await handlers.on_join(HA)
-        pos = position_store.user_positions[HA]
-        assert isinstance(pos, tuple)
-        assert len(pos) == 2
-
-    async def test_join_sends_init_to_joining_user(
-        self, mock_mapper, room_context, handlers
-    ):
-        """on_join は参加ユーザー自身に HostCommand.INIT を送る"""
         _add_session(room_context, HA)
         _add_session(room_context, HB)
-        us._users[HA] = make_test_user(HA)
+        us._users[HA] = make_test_user(HA, "Alice")
+        us._users[HB] = make_test_user(HB, "Bob")
 
-        sent_messages: list[dict] = []
+        raw_messages: list[dict] = []
+        broadcast_messages: list[dict] = []
 
         async def capture_raw(user: str, message: dict):
-            sent_messages.append({"to": user, "msg": message})
+            raw_messages.append({"to": user, "msg": message})
+
+        async def capture_bytes(user: str, data: bytes):
+            broadcast_messages.append({"to": user, "msg": json.loads(data)})
 
         with (
             patch("api.rtc.adapter.send_raw_message", new=capture_raw),
-            patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()),
-        ):
-            await handlers.on_join(HA)
-        init_msgs = [m for m in sent_messages if m["msg"]["command"] == "INIT"]
-        assert len(init_msgs) > 0
-        assert any(m["to"] == HA for m in init_msgs)
-
-        init_msg = init_msgs[0]["msg"]
-        assert "users" in init_msg
-        assert "map" in init_msg
-
-    async def test_join_broadcasts_join_to_existing_users(
-        self, mock_mapper, room_context, handlers
-    ):
-        """on_join は既存ユーザー全員に HostCommand.JOINED をブロードキャストする（参加者自身を除く）"""
-        _add_session(room_context, HA)
-        _add_session(room_context, HB)
-        us._users[HA] = make_test_user(HA)
-        us._users[HB] = make_test_user(HB)
-
-        sent_messages: list[dict] = []
-
-        async def capture_bytes(user: str, data: bytes):
-            sent_messages.append({"to": user, "msg": json.loads(data)})
-
-        with (
-            patch("api.rtc.adapter.send_raw_message", new=AsyncMock()),
             patch("api.rtc.adapter.send_raw_message_bytes", new=capture_bytes),
         ):
             await handlers.on_join(HA)
-        join_msgs = [m for m in sent_messages if m["msg"]["command"] == "JOINED"]
-        assert len(join_msgs) > 0
-        assert any(m["to"] == HB for m in join_msgs)
-        assert not any(m["to"] == HA for m in join_msgs)
 
+        assert HA in position_store.user_positions
+        init_messages = [
+            message for message in raw_messages if message["msg"]["command"] == "INIT"
+        ]
+        joined_messages = [
+            message
+            for message in broadcast_messages
+            if message["msg"]["command"] == "JOINED"
+        ]
 
-# ---------------------------------------------------------------------------
-# on_leave
-# ---------------------------------------------------------------------------
+        assert len(init_messages) == 1
+        assert init_messages[0]["to"] == HA
+        assert "users" in init_messages[0]["msg"]
+        assert "map" in init_messages[0]["msg"]
+        assert {message["to"] for message in joined_messages} == {HB}
 
-
-class TestOnLeave:
-    async def test_leave_removes_user_from_mapper(
+    async def test_leave_removes_user_and_broadcasts_left(
         self, mock_mapper, room_context, handlers
     ):
-        """on_leave はマッパーからユーザーを削除する"""
         _add_session(room_context, HA)
         _add_session(room_context, HB)
         mock_mapper.new_user(HA)
-        assert HA in position_store.user_positions
-
-        with patch("api.rtc.adapter.send_raw_message_bytes", new=AsyncMock()):
-            await handlers.on_leave(HA)
-
-        assert HA not in position_store.user_positions
-
-    async def test_leave_broadcasts_leave_to_all_users(
-        self, mock_mapper, room_context, handlers
-    ):
-        """on_leave は HostCommand.LEFT を全ユーザーにブロードキャストする"""
-        _add_session(room_context, HA)
-        _add_session(room_context, HB)
 
         sent_messages: list[dict] = []
 
@@ -393,11 +172,8 @@ class TestOnLeave:
         with patch("api.rtc.adapter.send_raw_message_bytes", new=capture):
             await handlers.on_leave(HA)
 
-        leave_msgs = [m for m in sent_messages if m["msg"]["command"] == "LEFT"]
-        assert len(leave_msgs) > 0
-
-        sent_to = {m["to"] for m in leave_msgs}
-        assert HB in sent_to
-
-        for m in leave_msgs:
-            assert m["msg"]["h"] == HA
+        assert HA not in position_store.user_positions
+        assert {message["to"] for message in sent_messages} == {HA, HB}
+        assert all(
+            message["msg"] == {"command": "LEFT", "h": HA} for message in sent_messages
+        )

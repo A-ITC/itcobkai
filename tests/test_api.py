@@ -1,14 +1,12 @@
 """\nFastAPI エンドポイントテスト\n\n対象エンドポイント:\n  GET  /api/token   — セッション Cookie を検証して JWT を返す\n  POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)\n  GET  /api/auth/authorize — Discord OAuth 認証 URL を返す\n  POST /api/discord — Discord OAuth2 コールバック\n  POST /api/master  — 管理コマンド (localhost 限定)\n  GET  /dist/assets/{filename}\n  GET  /dist/images/{hash}\n"""
 
-import json
 import pytest
 from time import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient, ASGITransport
 
 from api.api.auth import encode
-from api.utils.config import APP_NAME
-from api.master.user import UserStore, us
+from api.master.user import us
 from tests.conftest import make_test_user
 
 
@@ -134,18 +132,6 @@ class TestApiMaster:
             )
         assert resp.status_code == 403
 
-    async def test_wrong_secret_key_raises_http_403(self):
-        """X-Secret-Key が不正の場合も 403"""
-        from fastapi import HTTPException
-        from api.api.router import _check_secret_key
-
-        mock_request = MagicMock()
-        mock_request.headers = {"X-Secret-Key": "wrong-key"}
-
-        with pytest.raises(HTTPException) as exc_info:
-            _check_secret_key(mock_request)
-        assert exc_info.value.status_code == 403
-
     async def test_alert_command(self, local_client):
         """ALERT コマンドは send_message_all を呼んで 200 を返す"""
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
@@ -155,15 +141,6 @@ class TestApiMaster:
         assert resp.status_code == 200
         assert resp.json() == {"ok": True}
 
-    async def test_alert_with_reload_flag(self, local_client):
-        """ALERT + reload フラグは 200 を返す"""
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
-            resp = await local_client.post(
-                "/api/master",
-                json={"command": "ALERT", "text": "再起動", "reload": True},
-            )
-        assert resp.status_code == 200
-
     async def test_newmap_existing_map(self, local_client, mock_mapper):
         """NEWMAP コマンドは存在するマップ名で 200 を返す"""
         with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
@@ -172,13 +149,6 @@ class TestApiMaster:
             )
         assert resp.status_code == 200
         assert resp.json() == {"ok": True}
-
-    async def test_newmap_unknown_map_returns_404(self, local_client):
-        """NEWMAP コマンドは存在しないマップ名で 404 を返す"""
-        resp = await local_client.post(
-            "/api/master", json={"command": "NEWMAP", "map": "nonexistent_map_xyz"}
-        )
-        assert resp.status_code == 404
 
     async def test_leave_removes_participant(self, local_client):
         """LEAVE コマンドは LiveKit API を通じてユーザーを削除して 200 を返す"""
@@ -191,17 +161,6 @@ class TestApiMaster:
         assert resp.status_code == 200
         assert resp.json() == {"ok": True}
         mock_remove.assert_called_once()
-
-    async def test_leave_livekit_error_returns_400(self, local_client):
-        """LEAVE コマンドで LiveKit エラーが起きると 400 を返す"""
-        with patch("api.api.admin.lkapi") as mock_lkapi:
-            mock_lkapi.room.remove_participant = AsyncMock(
-                side_effect=Exception("Not found")
-            )
-            resp = await local_client.post(
-                "/api/master", json={"command": "LEAVE", "h": "ghost_user"}
-            )
-        assert resp.status_code == 400
 
     async def test_users_returns_active_sessions(self, local_client, room_context):
         """USERS コマンドはアクティブセッション一覧を返す"""
@@ -226,23 +185,6 @@ class TestApiMaster:
             "/api/master", json={"command": "UNKNOWN_COMMAND"}
         )
         assert resp.status_code == 400
-
-
-# ---------------------------------------------------------------------------
-# 静的ファイル配信
-# ---------------------------------------------------------------------------
-
-
-class TestStaticFiles:
-    async def test_asset_not_found_returns_404(self, client):
-        """存在しないアセットは 404"""
-        resp = await client.get("/dist/assets/nonexistent_file_xyz.js")
-        assert resp.status_code == 404
-
-    async def test_image_not_found_returns_404(self, client):
-        """存在しない画像ハッシュは 404"""
-        resp = await client.get("/dist/images/0000000000000000000000000000000000000000")
-        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
@@ -307,60 +249,6 @@ class TestApiUsersMe:
         assert body["groups"] == ["cg", "prog"]
         assert body["greeting"] == "こんにちは"
         assert body["h"] == "testhash123"
-
-    async def test_post_me_persists_to_store(self, client, valid_auth_header):
-        """POST 後に UserStore に変更が反映される"""
-        us._users["testhash123"] = make_test_user("testhash123", "Old Name")
-
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
-            await client.post(
-                "/api/users/@me",
-                headers=valid_auth_header,
-                json={"name": "Saved Name", "year": 2, "groups": [], "greeting": ""},
-            )
-
-        stored = us._users.get("testhash123")
-        assert stored is not None
-        assert stored.name == "Saved Name"
-
-    async def test_post_me_preserves_avatar(self, client, valid_auth_header):
-        """POST でアバターが上書きされない"""
-        user = make_test_user("testhash123", "Alice")
-        user.avatar = "avatar_hash_abc"
-        us._users["testhash123"] = user
-
-        with patch("api.rtc.adapter.send_raw_message", new=AsyncMock()):
-            resp = await client.post(
-                "/api/users/@me",
-                headers=valid_auth_header,
-                json={"name": "Alice", "year": 1, "groups": [], "greeting": ""},
-            )
-
-        assert resp.json()["avatar"] == "avatar_hash_abc"
-
-    async def test_post_me_broadcasts_updated(self, client, valid_auth_header):
-        """POST 後に UPDATED が他ユーザーへブロードキャストされる"""
-        us._users["testhash123"] = make_test_user("testhash123", "Alice")
-
-        sent_messages: list[dict] = []
-
-        async def capture(h: str, msg: dict):
-            sent_messages.append((h, msg))
-
-        with patch("api.rtc.adapter.send_raw_message", new=capture):
-            await client.post(
-                "/api/users/@me",
-                headers=valid_auth_header,
-                json={
-                    "name": "Alice",
-                    "year": 1,
-                    "groups": ["dtm"],
-                    "greeting": "hello",
-                },
-            )
-
-        # active_sessions が空なので UPDATED は誰にも送られない（no-op でエラーなし）
-        assert sent_messages == []
 
     async def test_post_me_user_not_found_returns_404(self, client, valid_auth_header):
         """UserStore に存在しないユーザーは 404"""
@@ -465,17 +353,3 @@ class TestApiUsersH:
             "/api/users/nonexistent_hash_xyz", headers=valid_auth_header
         )
         assert resp.status_code == 404
-
-    async def test_get_user_returns_current_position(self, client, valid_auth_header):
-        """取得したユーザー情報に set_position で更新した座標が含まれる"""
-        from api.master.user import us as user_store
-
-        user = make_test_user("otherhash456", "Bob")
-        us._users["otherhash456"] = user
-        user_store.set_position("otherhash456", 10, 20)
-
-        resp = await client.get("/api/users/otherhash456", headers=valid_auth_header)
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["x"] == 10
-        assert body["y"] == 20

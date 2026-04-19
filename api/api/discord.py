@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from urllib.parse import quote
 from ..master.user import User
-from ..utils.utils import id7
+from ..utils.ids import id7
 from ..utils.config import (
     AVATAR_DIR,
     DEV_PORT,

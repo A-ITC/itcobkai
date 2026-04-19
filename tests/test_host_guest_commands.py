@@ -34,7 +34,7 @@ from api.rtc.adapter import GuestCommand, HostCommand
 from api.utils.config import APP_NAME, DOMAIN
 from api.rtc.rtc import create_token, init_room
 from api.master.user import User, UserStore, us
-from api.master.position_store import position_store
+from api.master.position import position_store
 from tests.conftest import make_test_user
 
 pytestmark = pytest.mark.livekit
@@ -425,3 +425,95 @@ async def test_lk_update_preserves_position_from_server(two_participants):
     assert msg["user"]["x"] == server_x
     assert msg["user"]["y"] == server_y
     assert msg["user"]["name"] == "Position Test"
+
+
+# ---------------------------------------------------------------------------
+# テスト: NEWMAP
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.livekit
+async def test_lk_newmap_broadcasts_new_map_and_other_user_positions(
+    two_participants, local_client
+):
+    """NEWMAP 実行時に全参加者が NEWMAP を受け取り、続けて他ユーザーの
+    再配置座標を MOVED で受け取る。
+    """
+    pa, pb = two_participants
+
+    resp = await local_client.post(
+        "/api/master", json={"command": "NEWMAP", "map": "map2"}
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True}
+
+    msg_a_map = await pa.wait_for_command("NEWMAP", timeout=10.0)
+    msg_b_map = await pb.wait_for_command("NEWMAP", timeout=10.0)
+    msg_a_move = await pa.wait_for_command("MOVED", timeout=10.0)
+    msg_b_move = await pb.wait_for_command("MOVED", timeout=10.0)
+
+    assert msg_a_map["map"]["name"] == "map2"
+    assert msg_b_map["map"]["name"] == "map2"
+
+    assert len(msg_a_move["moves"]) == 1
+    assert len(msg_b_move["moves"]) == 1
+    assert msg_a_move["moves"][0]["h"] == HB
+    assert msg_b_move["moves"][0]["h"] == HA
+
+
+# ---------------------------------------------------------------------------
+# テスト: 再接続
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.livekit
+async def test_lk_reconnect_sends_left_then_init_and_joined(
+    livekit_domain, mock_mapper, room_context
+):
+    """同じユーザーが再接続すると、既存ユーザーは LEFT の後に JOINED を受け取り、
+    再接続した本人は新しい INIT を受け取る。
+    """
+    us._users[HA] = make_test_user(HA, "User A")
+    us._users[HB] = make_test_user(HB, "User B")
+
+    await init_room(HA)
+    await init_room(HB)
+
+    pa = _TestParticipant(HA)
+    pb = _TestParticipant(HB)
+
+    await pa.connect()
+    await pa.wait_for_command("INIT", timeout=15.0)
+
+    await pb.connect()
+    await pb.wait_for_command("INIT", timeout=15.0)
+    await pa.wait_for_command("JOINED", timeout=15.0)
+    await pa.drain()
+    await pb.drain()
+
+    await pa.disconnect()
+    left_msg = await pb.wait_for_command("LEFT", timeout=10.0)
+
+    assert left_msg["command"] == "LEFT"
+    assert left_msg["h"] == HA
+
+    await init_room(HA)
+    pa2 = _TestParticipant(HA)
+
+    try:
+        await pa2.connect()
+        init_msg = await pa2.wait_for_command("INIT", timeout=15.0)
+        joined_msg = await pb.wait_for_command("JOINED", timeout=15.0)
+
+        assert init_msg["command"] == "INIT"
+        assert any(user["h"] == HA for user in init_msg["users"])
+        assert joined_msg["command"] == "JOINED"
+        assert joined_msg["user"]["h"] == HA
+    finally:
+        await pa2.disconnect()
+        await pb.disconnect()
+        for h in [HA, HB]:
+            session = room_context.active_sessions.pop(h, None)
+            if session:
+                await session.room.disconnect()
