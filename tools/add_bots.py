@@ -10,9 +10,8 @@ import json
 import os
 import random
 import sys
-import time
 from pathlib import Path
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 # プロジェクトルートをパスに追加
@@ -51,6 +50,12 @@ APP_NAME: str = "itcobkai"
 # =========================================================================
 # HTTP ヘルパー
 # =========================================================================
+class ApiRequestError(Exception):
+    def __init__(self, status_code: int, message: str):
+        super().__init__(message)
+        self.status_code = status_code
+
+
 def _post(base_url: str, payload: dict, secret: str) -> dict:
     body = json.dumps(payload).encode()
     req = Request(
@@ -62,7 +67,13 @@ def _post(base_url: str, payload: dict, secret: str) -> dict:
     try:
         with urlopen(req, timeout=10) as resp:
             return json.loads(resp.read())
-    except URLError as e:
+    except HTTPError as e:
+        try:
+            error_body = json.loads(e.read())
+        except json.JSONDecodeError:
+            error_body = {}
+        raise ApiRequestError(e.code, error_body.get("error", f"HTTP {e.code}"))
+    except URLError:
         print(f"エラー: API サーバーに接続できません ({base_url})", file=sys.stderr)
         sys.exit(1)
 
@@ -222,42 +233,68 @@ async def _amain(args: argparse.Namespace):
         sys.exit(1)
 
     count = min(args.count, len(all_users))
-    selected = random.sample(all_users, count)
+    selected = list(all_users)
+    random.shuffle(selected)
     base_url = f"http://127.0.0.1:{api_port}"
 
-    print(f"{count} 台のボットを初期化中...")
-    for i, user in enumerate(selected):
-        _post(base_url, {"command": "BOTINIT", "h": user.h}, secret)
-        if i < count - 1:
-            time.sleep(1)  # LiveKit の WebRTC ハンドシェイクが完了するまで待機
-
-    bots = [
-        BotClient(
-            u.model_dump(),
-            _NOTES_HZ[i % len(_NOTES_HZ)],
-            _NOTES_JP[i % len(_NOTES_JP)],
-            domain,
-            secret,
-        )
-        for i, u in enumerate(selected)
-    ]
-
-    print("LiveKit に接続開始（逐次接続）...")
     connected: list[BotClient] = []
-    for b in bots:
-        result = await b.connect()
-        if result:
-            connected.append(b)
-
-    if not connected:
-        print("エラー: 接続失敗", file=sys.stderr)
-        sys.exit(1)
-
-    print(f"\n{len(connected)} 台稼働中. Ctrl+C で終了.")
+    print(f"{count} 台のボットを起動中...")
     try:
-        await asyncio.gather(*[b.run() for b in connected])
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        pass
+        for user in selected:
+            if len(connected) >= count:
+                break
+
+            try:
+                _post(base_url, {"command": "BOTINIT", "h": user.h}, secret)
+            except ApiRequestError as e:
+                if e.status_code == 409:
+                    print(f"[{user.name}] 既に接続中のためスキップ")
+                    continue
+                print(f"[{user.name}] BOTINIT 失敗: {e}", file=sys.stderr)
+                raise SystemExit(1) from e
+
+            bot_index = len(connected)
+            bot = BotClient(
+                user.model_dump(),
+                _NOTES_HZ[bot_index % len(_NOTES_HZ)],
+                _NOTES_JP[bot_index % len(_NOTES_JP)],
+                domain,
+                secret,
+            )
+
+            if not await bot.connect():
+                await bot.disconnect()
+                continue
+
+            connected.append(bot)
+            print(f"[{bot.name}] 接続完了 ({len(connected)}/{count})")
+
+        if len(connected) < count:
+            print(
+                f"エラー: {count} 台のボットを起動できませんでした ({len(connected)} 台のみ接続)",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+
+        if args.auto_stop:
+            print(f"\n{len(connected)} 台稼働中. 60秒後に自動停止します。")
+        else:
+            print(f"\n{len(connected)} 台稼働中. Ctrl+C で終了.")
+
+        run_tasks = [asyncio.create_task(b.run()) for b in connected]
+        try:
+            if args.auto_stop:
+                await asyncio.wait_for(asyncio.gather(*run_tasks), timeout=60)
+            else:
+                await asyncio.gather(*run_tasks)
+        except asyncio.TimeoutError:
+            print("60秒経過したため自動停止します。")
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            for task in run_tasks:
+                task.cancel()
+            await asyncio.gather(*run_tasks, return_exceptions=True)
     finally:
         await asyncio.gather(
             *[b.disconnect() for b in connected], return_exceptions=True
@@ -267,6 +304,12 @@ async def _amain(args: argparse.Namespace):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("count", type=int)
+    parser.add_argument(
+        "--auto-stop",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="60秒後に自動停止する（既定: 有効。無効化は --no-auto-stop）",
+    )
     args = parser.parse_args()
     try:
         asyncio.run(_amain(args))

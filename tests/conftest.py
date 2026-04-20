@@ -33,7 +33,6 @@ from api.rtc.state import (
     current_islands,
     handler,
     muted_users,
-    reset_handlers,
     reset_runtime_state,
     set_mute,
 )
@@ -67,7 +66,9 @@ def reset_state():
     position_store.reset()
     connection_service.reset()
     reset_runtime_state()
-    reset_handlers()
+    handler.on_message = _noop_message_handler
+    handler.on_join = _noop_presence_handler
+    handler.on_leave = _noop_presence_handler
     register()
     yield
     us._users.clear()
@@ -77,7 +78,9 @@ def reset_state():
     position_store.reset()
     connection_service.reset()
     reset_runtime_state()
-    reset_handlers()
+    handler.on_message = _noop_message_handler
+    handler.on_join = _noop_presence_handler
+    handler.on_leave = _noop_presence_handler
 
 
 @pytest.fixture(autouse=True)
@@ -189,3 +192,11 @@ def livekit_domain():
 def make_test_user(h: str, name: str = "Test User") -> User:
     """テスト用 User オブジェクトを生成する"""
     return User(h=h, name=name, year=1, groups=[], avatar="", x=0, y=0)
+
+
+async def _noop_message_handler(_user: str, _message: dict):
+    return None
+
+
+async def _noop_presence_handler(_user: str):
+    return None

@@ -1,6 +1,6 @@
 import { HostCommand, HostMessage, MapRaw, User } from "../common/Schema";
 import UserStore from "./UserStore";
-import { NotificationPort } from "./notifications";
+import { NotificationPort } from "../common/Toast";
 
 type ControllerPort = {
   newMap(map: MapRaw): Promise<void>;

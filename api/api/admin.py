@@ -80,14 +80,11 @@ async def master_request(post: MasterRequest):
         return {"users": users}
 
     if post.command == "BOTINIT" and post.h:
-        h = post.h
-        old = active_sessions.pop(h, None)
-        if old:
-            try:
-                await old.room.disconnect()
-            except Exception:
-                pass
-        await init_room(h)
+        if post.h in active_sessions:
+            return JSONResponse(
+                content={"error": "User already active"}, status_code=409
+            )
+        await init_room(post.h)
         return {"ok": True}
 
     return JSONResponse(content={"error": "Unknown command"}, status_code=400)

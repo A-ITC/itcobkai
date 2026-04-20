@@ -2,19 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { User } from "../../src/common/Schema";
 
 const { loadImage } = vi.hoisted(() => ({
-  loadImage: vi.fn((src: string, image: HTMLImageElement) => {
-    image.src = src || "data:fallback";
+  loadImage: vi.fn((category: string, hash: string, image: HTMLImageElement) => {
+    image.src = hash ? `/dist/image/${category}/${hash}` : "data:fallback";
     return Promise.resolve(image);
   })
 }));
 
-vi.mock("../../src/common/Common", () => ({
-  IMAGE_URL: "/dist/images",
-  loadImage,
-  createFallbackImage: vi.fn().mockReturnValue("data:fallback")
+vi.mock("../../src/common/ImageLoader", () => ({
+  loadImage
 }));
 
-import AvatarLoader from "../../src/main/AvatarLoader";
+import Controller from "../../src/map/Controller";
 
 afterEach(() => {
   loadImage.mockClear();
@@ -34,23 +32,27 @@ function makeUser(overrides: Partial<User> & Pick<User, "h" | "name">): User {
   };
 }
 
-describe("AvatarLoader", () => {
+describe("Controller avatar preload", () => {
   it("同じアバターは重複ロードしない", async () => {
-    const loader = new AvatarLoader();
+    const controller = new Controller();
     const user = makeUser({ h: "u1", name: "Alice", avatar: "avatar.png" });
 
-    await loader.preload([user, user]);
-    await loader.preload([user]);
+    await Promise.all([
+      (controller as any).ensureAvatarLoaded(user),
+      (controller as any).ensureAvatarLoaded(user),
+      (controller as any).ensureAvatarLoaded(user)
+    ]);
 
     expect(loadImage).toHaveBeenCalledTimes(1);
-    expect(loader.get(user)?.src).toContain("/dist/images/avatar.png");
+    expect(loadImage).toHaveBeenCalledWith("avatars", "avatar.png", expect.any(HTMLImageElement));
+    expect((controller as any).avatars[user.h]?.src).toContain("/dist/image/avatars/avatar.png");
   });
 
   it("アバター変更時は再ロードする", async () => {
-    const loader = new AvatarLoader();
+    const controller = new Controller();
 
-    await loader.preload([makeUser({ h: "u1", name: "Alice", avatar: "avatar-a.png" })]);
-    await loader.preload([makeUser({ h: "u1", name: "Alice", avatar: "avatar-b.png" })]);
+    await (controller as any).ensureAvatarLoaded(makeUser({ h: "u1", name: "Alice", avatar: "avatar-a.png" }));
+    await (controller as any).ensureAvatarLoaded(makeUser({ h: "u1", name: "Alice", avatar: "avatar-b.png" }));
 
     expect(loadImage).toHaveBeenCalledTimes(2);
   });

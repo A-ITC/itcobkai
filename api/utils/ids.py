@@ -12,7 +12,3 @@ def id62(num: int) -> str:
 
 def id7(num: int) -> str:
     return id62(int(blake2b(str(num).encode(), digest_size=5).hexdigest(), 16))
-
-
-def blake(text: str) -> str:
-    return id62(int(blake2b(text.encode(), digest_size=9).hexdigest(), 16))

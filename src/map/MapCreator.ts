@@ -1,5 +1,6 @@
 import { Map, MapRaw, User } from "../common/Schema";
-import { IMAGE_URL, loadImage, storage } from "../common/Common";
+import { storage } from "../common/Common";
+import { loadImage } from "../common/ImageLoader";
 
 // Canvasにマップや人物を描画するクラス
 export default class MapCreator {
@@ -48,10 +49,7 @@ export default class MapCreator {
       width: red[0].length,
       height: red.length
     };
-    await Promise.all([
-      loadImage(`${IMAGE_URL}/${mapraw.top}`, map.topImage),
-      loadImage(`${IMAGE_URL}/${mapraw.bottom}`, map.bottomImage)
-    ]);
+    await Promise.all([loadImage("maps", mapraw.top, map.topImage), loadImage("maps", mapraw.bottom, map.bottomImage)]);
     return map;
   }
 
@@ -152,42 +150,5 @@ export default class MapCreator {
     const size = MapCreator.updateStorage();
     if (this.canvas.width !== size) this.canvas.width = size;
     if (this.canvas.height !== size) this.canvas.height = size;
-  }
-
-  public touchAction(move: (dx: number, dy: number) => void) {
-    let touching = false;
-    let direction: [number, number] = [0, 0];
-
-    function touched(e: TouchEvent) {
-      touching = false;
-      if (!e.target) return;
-      const dom = e.target as HTMLElement;
-      if (dom.dataset.id !== "map") return;
-      e.preventDefault();
-      touching = true;
-      const rect = dom.getClientRects()[0];
-      const client = e.changedTouches[0];
-      const x = client.clientX - (rect.right + rect.left) / 2;
-      const y = client.clientY - (rect.bottom + rect.top) / 2;
-      if (Math.abs(x) <= y)
-        direction = [0, 1]; // 下
-      else if (Math.abs(y) <= x)
-        direction = [1, 0]; // 右
-      else if (Math.abs(x) <= -y)
-        direction = [0, -1]; // 上
-      else if (Math.abs(y) <= -x) direction = [-1, 0]; // 左
-    }
-
-    setInterval(() => {
-      if (touching) move(...direction);
-    }, 100);
-    window.addEventListener("touchstart", e => touched(e));
-    window.addEventListener("touchmove", e => touched(e));
-    window.addEventListener("touchend", () => (touching = false));
-    this.canvas.oncontextmenu = function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    };
   }
 }

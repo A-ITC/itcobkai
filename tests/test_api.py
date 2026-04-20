@@ -1,4 +1,4 @@
-"""\nFastAPI エンドポイントテスト\n\n対象エンドポイント:\n  GET  /api/token   — セッション Cookie を検証して JWT を返す\n  POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)\n  GET  /api/auth/authorize — Discord OAuth 認証 URL を返す\n  POST /api/discord — Discord OAuth2 コールバック\n  POST /api/master  — 管理コマンド (localhost 限定)\n  GET  /dist/assets/{filename}\n  GET  /dist/images/{hash}\n"""
+"""\nFastAPI エンドポイントテスト\n\n対象エンドポイント:\n  GET  /api/token   — セッション Cookie を検証して JWT を返す\n  POST /api/init    — LiveKit ルームを初期化してトークンを返す (@livekit のみ実接続)\n  GET  /api/auth/authorize — Discord OAuth 認証 URL を返す\n  POST /api/discord — Discord OAuth2 コールバック\n  POST /api/master  — 管理コマンド (localhost 限定)\n  GET  /dist/assets/{filename}\n  GET  /dist/image/avatars/{hash}\n  GET  /dist/image/maps/{hash}\n"""
 
 import pytest
 from time import time
@@ -185,6 +185,52 @@ class TestApiMaster:
             "/api/master", json={"command": "UNKNOWN_COMMAND"}
         )
         assert resp.status_code == 400
+
+
+class TestDistImage:
+    async def test_avatar_image_route_returns_file(self, client, tmp_path):
+        avatar_dir = tmp_path / "avatars"
+        avatar_dir.mkdir()
+        (avatar_dir / "avatar-hash.webp").write_bytes(b"avatar")
+
+        with patch("api.api.router.AVATAR_DIR", str(avatar_dir)):
+            resp = await client.get("/dist/image/avatars/avatar-hash")
+
+        assert resp.status_code == 200
+        assert resp.content == b"avatar"
+        assert resp.headers["cache-control"] == "public, max-age=86400"
+
+    async def test_map_image_route_returns_file(self, client, tmp_path):
+        map_dir = tmp_path / "maps"
+        map_dir.mkdir()
+        (map_dir / "map-hash.png").write_bytes(b"map")
+
+        with patch("api.api.router.MAP_DIR", str(map_dir)):
+            resp = await client.get("/dist/image/maps/map-hash")
+
+        assert resp.status_code == 200
+        assert resp.content == b"map"
+        assert resp.headers["cache-control"] == "public, max-age=86400"
+
+    async def test_avatar_image_route_returns_404_for_missing_file(
+        self, client, tmp_path
+    ):
+        avatar_dir = tmp_path / "avatars"
+        avatar_dir.mkdir()
+
+        with patch("api.api.router.AVATAR_DIR", str(avatar_dir)):
+            resp = await client.get("/dist/image/avatars/missing")
+
+        assert resp.status_code == 404
+
+    async def test_map_image_route_returns_404_for_missing_file(self, client, tmp_path):
+        map_dir = tmp_path / "maps"
+        map_dir.mkdir()
+
+        with patch("api.api.router.MAP_DIR", str(map_dir)):
+            resp = await client.get("/dist/image/maps/missing")
+
+        assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------

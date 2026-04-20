@@ -3,7 +3,7 @@ import { HashRouter, Route } from "@solidjs/router";
 import { render } from "solid-js/web";
 import Login from "./pages/Login";
 import Setup from "./pages/Setup";
-import Main from "./main/Main";
+import Main from "./pages/Main";
 import "toastify-js/src/toastify.css";
 import "./index.css";
 

@@ -8,7 +8,6 @@ import {
   DataPacket_Kind
 } from "livekit-client";
 import { HostMessage, GuestMessage } from "./Schema";
-import { beep } from "./Common";
 
 export class RTCClient {
   private room: Room | null = null;
@@ -17,7 +16,7 @@ export class RTCClient {
   public onDisconnect?: () => void;
 
   public async init(token: string, _audio: HTMLAudioElement) {
-    beep();
+    this.beep();
 
     this.room = new Room({
       adaptiveStream: true,
@@ -61,6 +60,18 @@ export class RTCClient {
         room.localParticipant.publishData(encoded, { reliable: true });
       }
     };
+  }
+
+  private beep() {
+    // 動作確認用の音を鳴らす
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    gain.gain.value = 0.1;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    setTimeout(() => osc.stop(), 200);
   }
 
   public async mute(muted: boolean) {

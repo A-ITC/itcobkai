@@ -1,7 +1,7 @@
 import { useNavigate } from "@solidjs/router";
 import { createSignal, onMount, Show } from "solid-js";
-import ProfileForm from "../main/ProfileForm";
 import { User } from "../common/Schema";
+import ProfileForm from "../views/ProfileForm";
 
 export default function Setup() {
   const navigate = useNavigate();

@@ -1,7 +1,7 @@
-import { HostCommand, GuestCommand, User, HostMessage, GuestMessage } from "../common/Schema";
-import Controller from "./Controller";
+import { GuestCommand, User, HostMessage, GuestMessage } from "../common/Schema";
+import Controller from "../map/Controller";
 import HostMessageDispatcher from "./HostMessageDispatcher";
-import { browserNotifications } from "./notifications";
+import { browserNotifications } from "../common/Toast";
 import RtcSession from "./RtcSession";
 import UserStore from "./UserStore";
 import request from "../common/Common";

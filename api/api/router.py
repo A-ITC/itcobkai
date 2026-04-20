@@ -132,19 +132,27 @@ def get_asset(filename: str):
     return JSONResponse(content={"error": "File not found"}, status_code=404)
 
 
-@router.get("/dist/images/{hash:str}")
-def get_image(hash: str):
-    """画像を返すエンドポイント"""
+def _get_image(base_dir: str, filename: str):
     headers = {"Cache-Control": "public, max-age=86400"}
-    map_base = Path(MAP_DIR).resolve()
-    avatar_base = Path(AVATAR_DIR).resolve()
-    map_path = (map_base / f"{hash}.png").resolve()
-    avatar_path = (avatar_base / f"{hash}.webp").resolve()
-    if map_path.is_file() and map_path.is_relative_to(map_base):
-        return FileResponse(str(map_path), headers=headers)
-    if avatar_path.is_file() and avatar_path.is_relative_to(avatar_base):
-        return FileResponse(str(avatar_path), headers=headers)
+    base = Path(base_dir).resolve()
+    file_path = (base / filename).resolve()
+    if not file_path.is_relative_to(base):
+        return JSONResponse(content={"error": "Forbidden"}, status_code=403)
+    if file_path.is_file():
+        return FileResponse(str(file_path), headers=headers)
     return JSONResponse(content={"error": "Image not found"}, status_code=404)
+
+
+@router.get("/dist/image/avatars/{hash:str}")
+def get_avatar_image(hash: str):
+    """アバター画像を返すエンドポイント"""
+    return _get_image(AVATAR_DIR, f"{hash}.webp")
+
+
+@router.get("/dist/image/maps/{hash:str}")
+def get_map_image(hash: str):
+    """マップ画像を返すエンドポイント"""
+    return _get_image(MAP_DIR, f"{hash}.png")
 
 
 def _check_secret_key(request: Request):

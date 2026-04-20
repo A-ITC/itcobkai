@@ -71,12 +71,6 @@ def reset_runtime_state() -> None:
     audio_tasks.clear()
 
 
-def reset_handlers() -> None:
-    handler.on_message = _noop_message_handler
-    handler.on_join = _noop_presence_handler
-    handler.on_leave = _noop_presence_handler
-
-
 async def send_raw_message(user: str, message: dict[str, Any]) -> None:
     if session := active_sessions.get(user):
         await session.room.local_participant.publish_data(

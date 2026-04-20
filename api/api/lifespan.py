@@ -7,7 +7,6 @@ from ..rtc.mixer import mixing_loop
 from ..rtc.state import (
     active_sessions,
     audio_tasks,
-    reset_handlers,
     reset_runtime_state,
 )
 from ..master.user import us
@@ -25,7 +24,6 @@ logger = getLogger(__name__)
 async def lifespan(app: FastAPI):
     init_logger("app")
     # reset_runtime_state()
-    # reset_handlers()
     register()
     logger.info("start lifespan")
     us.load()

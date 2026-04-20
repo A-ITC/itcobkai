@@ -1,6 +1,6 @@
-import { labelIslands, getPlayerConnections } from "./Connections";
-import { IMAGE_URL, createFallbackImage } from "../common/Common";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { labelIslands, getPlayerConnections } from "../main/Connections";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { loadImage } from "../common/ImageLoader";
 import { User } from "../common/Schema";
 
 interface VoicePanelProps {
@@ -117,14 +117,19 @@ export function VoicePanel(props: VoicePanelProps) {
 
 // UserItem: ユーザーリストの各行
 function UserItem(props: { user: User }) {
+  let imageRef: HTMLImageElement | undefined;
+
+  createEffect(() => {
+    props.user.avatar;
+    if (!imageRef) return;
+    void loadImage("avatars", props.user.avatar, imageRef);
+  });
+
   return (
     <div class="flex items-center gap-3 py-3 portrait:py-4 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
       <div class="relative shrink-0">
         <img
-          src={props.user.avatar ? `${IMAGE_URL}/${props.user.avatar}` : createFallbackImage(40, 40)}
-          onError={e => {
-            (e.currentTarget as HTMLImageElement).src = createFallbackImage(40, 40);
-          }}
+          ref={imageRef}
           alt="avatar"
           class="w-10 h-10 portrait:w-12 portrait:h-12 rounded-full border-2 border-gray-600 object-cover"
         />

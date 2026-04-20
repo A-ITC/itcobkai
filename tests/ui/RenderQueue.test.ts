@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import RenderQueue from "../../src/main/RenderQueue";
+import RenderQueue from "../../src/map/RenderQueue";
 
 describe("RenderQueue", () => {
   it("描画中の再要求を 1 回に集約する", async () => {

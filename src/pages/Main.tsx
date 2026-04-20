@@ -1,9 +1,11 @@
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { User } from "../common/Schema";
 import request from "../common/Common";
-import MainView, { Tab } from "./MainView";
-import MapCreator from "./MapCreator";
-import { createManager } from "./createManager";
+import MapCreator from "../map/MapCreator";
+import Manager from "../main/Manager";
+import ProfileForm from "../views/ProfileForm";
+import { VoicePanel } from "../views/VoicePanel";
+import { HeaderBar, Tab } from "../views/Header";
 
 function directionFromKey(key: string): [number, number] | undefined {
   if (key === "a" || key === "ArrowLeft") return [-1, 0];
@@ -21,7 +23,7 @@ export default function Main() {
   const [tab, setTab] = createSignal<Tab>("map");
   const [canvasSize, setCanvasSize] = createSignal(0);
   const mq = window.matchMedia("(orientation: portrait)");
-  const manager = createManager();
+  const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
 
@@ -89,24 +91,57 @@ export default function Main() {
   };
 
   return (
-    <MainView
-      users={users()}
-      connected={connected()}
-      playerId={playerId()}
-      area={area()}
-      tab={tab()}
-      canvasSize={canvasSize()}
-      onTabChange={setTab}
-      connectButton={connectButton}
-      leaveButton={leaveButton}
-      muteButton={muteButton}
-      onCanvasKeyDown={handleCanvasKeyDown}
-      setCanvasRef={element => {
-        canvasRef = element;
-      }}
-      setAudioRef={element => {
-        audioRef = element;
-      }}
-    />
+    <div class="bg-gray-800 text-gray-200 min-h-screen flex landscape:items-center justify-center p-4 portrait:p-2">
+      <div class="flex flex-row portrait:flex-col bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-700 max-w-full portrait:w-full">
+        <div class="p-6 flex flex-col items-center">
+          <div class="w-full">
+            <HeaderBar
+              tab={tab()}
+              onTabChange={setTab}
+            />
+          </div>
+
+          <div
+            class="relative bg-gray-950 rounded border border-gray-700 overflow-hidden"
+            style={{ display: tab() === "map" ? "block" : "none" }}
+          >
+            <canvas
+              ref={element => {
+                canvasRef = element;
+              }}
+              onKeyDown={handleCanvasKeyDown}
+              class="block touch-none"
+              tabIndex="0"
+            ></canvas>
+            <audio
+              ref={element => {
+                audioRef = element;
+              }}
+            ></audio>
+          </div>
+
+          <Show when={tab() === "edit"}>
+            <div class="relative bg-gray-950 rounded border border-gray-700 overflow-auto text-gray-200 p-2">
+              <ProfileForm
+                initialUser={users()[playerId()]}
+                onSaved={() => setTab("map")}
+                canvasSize={canvasSize()}
+              />
+            </div>
+          </Show>
+        </div>
+
+        <VoicePanel
+          connected={connected()}
+          connectButton={connectButton}
+          leaveButton={leaveButton}
+          muteButton={muteButton}
+          users={users()}
+          playerId={playerId()}
+          area={area()}
+          canvasSize={canvasSize()}
+        />
+      </div>
+    </div>
   );
 }

@@ -1,15 +1,15 @@
 import { GuestCommand, GuestMessage, MapRaw, User } from "../common/Schema";
-import { ticker } from "../common/Common";
-import AvatarLoader from "./AvatarLoader";
+import { loadImage } from "../common/ImageLoader";
+import RenderQueue from "./RenderQueue";
 import MapCreator from "./MapCreator";
 import Cropper from "./Cropper";
-import RenderQueue from "./RenderQueue";
 
 export default class Controller {
   public canvas: HTMLCanvasElement = document.createElement("canvas");
   private mc = new MapCreator();
   private cropper = new Cropper(this.mc.map, 0, 0);
-  private avatarLoader = new AvatarLoader();
+  private avatars: Record<string, HTMLImageElement> = {};
+  private pendingAvatarLoads = new Map<string, Promise<HTMLImageElement>>();
   private renderQueue = new RenderQueue(async () => this.renderFrame());
   private message = (_data: GuestMessage) => {};
   private inThrottle = false;
@@ -29,7 +29,8 @@ export default class Controller {
     this.message = message;
     this.canvas = canvas;
     this.mc = new MapCreator();
-    this.avatarLoader = new AvatarLoader();
+    this.avatars = {};
+    this.pendingAvatarLoads = new Map();
     // canvasRef を mc に設定しておくことで、newMap前のresizeでも実canvasにサイズが反映される
     this.mc.setCanvas(canvas);
     this.cropper = new Cropper(this.mc.map, 0, 0);
@@ -95,7 +96,45 @@ export default class Controller {
     const { top, left } = this.cropper.get();
     const allUsers: User[] = Object.values(this.users).filter(u => !this.player || u.h !== this.player.h);
     if (this.player) allUsers.push(this.player);
-    await this.avatarLoader.preload(allUsers);
-    this.mc.draw(allUsers, left, top, user => this.avatarLoader.get(user));
+    await Promise.all(allUsers.map(user => this.ensureAvatarLoaded(user)));
+    this.mc.draw(allUsers, left, top, user => this.avatars[user.h]);
+  }
+
+  private ensureAvatarLoaded(user: User): Promise<HTMLImageElement> {
+    const avatarUrl = user.avatar ? `/dist/image/avatars/${user.avatar}` : "";
+    const current = this.avatars[user.h];
+    if (current && (!avatarUrl || current.src.endsWith(avatarUrl))) {
+      return Promise.resolve(current);
+    }
+
+    const loadKey = `${user.h}:${avatarUrl}`;
+    const pending = this.pendingAvatarLoads.get(loadKey);
+    if (pending) {
+      return pending;
+    }
+
+    const image = new Image();
+    const load = loadImage("avatars", user.avatar, image).then(loaded => {
+      this.avatars[user.h] = loaded;
+      this.pendingAvatarLoads.delete(loadKey);
+      return loaded;
+    });
+
+    this.pendingAvatarLoads.set(loadKey, load);
+    return load;
   }
 }
+
+const tickerFuncs: { [key: string]: () => void } = {};
+setInterval(() => Object.values(tickerFuncs).forEach(f => f()), 1000);
+
+const ticker = new Proxy(tickerFuncs, {
+  set(target, key: string, value: () => void) {
+    target[key] = value;
+    return true;
+  },
+  deleteProperty(target, key: string) {
+    delete target[key];
+    return true;
+  }
+});
