@@ -1,7 +1,7 @@
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { User } from "../common/Schema";
-import request from "../common/Common";
-import MapCreator from "../map/MapCreator";
+import request from "../common/Request";
+import { ViewportService } from "../map/Viewport";
 import Manager from "../main/Manager";
 import ProfileForm from "../views/ProfileForm";
 import { VoicePanel } from "../views/VoicePanel";
@@ -22,32 +22,23 @@ export default function Main() {
   const [area, setArea] = createSignal<boolean[][]>([]);
   const [tab, setTab] = createSignal<Tab>("map");
   const [canvasSize, setCanvasSize] = createSignal(0);
-  const mq = window.matchMedia("(orientation: portrait)");
   const manager = new Manager();
   let canvasRef: HTMLCanvasElement | undefined;
   let audioRef: HTMLAudioElement | undefined;
 
   onMount(() => {
-    const applySize = () => {
-      const size = MapCreator.updateStorage();
+    const viewport = new ViewportService(metrics => {
       if (canvasRef) {
-        canvasRef.width = size;
-        canvasRef.height = size;
+        canvasRef.width = metrics.size;
+        canvasRef.height = metrics.size;
       }
-      setCanvasSize(size);
-      manager.onResize();
-    };
-    const handleOrientation = (e: MediaQueryListEvent) => {
-      applySize();
-    };
-    mq.addEventListener("change", handleOrientation);
-    applySize();
-    window.addEventListener("resize", applySize);
-
+      setCanvasSize(metrics.size);
+      manager.onResize(metrics);
+    });
+    viewport.start();
     onCleanup(() => {
-      mq.removeEventListener("change", handleOrientation);
-      window.removeEventListener("resize", applySize);
-      manager.end();
+      viewport.dispose();
+      void manager.end();
     });
   });
 

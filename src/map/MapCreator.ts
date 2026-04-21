@@ -1,30 +1,32 @@
 import { Map, MapRaw, User } from "../common/Schema";
-import { storage } from "../common/Common";
 import { loadImage } from "../common/ImageLoader";
+import { ViewportMetrics } from "./Viewport";
 
 // Canvasにマップや人物を描画するクラス
 export default class MapCreator {
   private canvas = document.createElement("canvas");
   private ctx: CanvasRenderingContext2D;
+  private viewport: ViewportMetrics;
   public map: Map = { area: [], noentry: [], topImage: new Image(), bottomImage: new Image(), width: 0, height: 0 };
 
-  constructor() {
+  constructor(viewport: ViewportMetrics) {
     this.ctx = this.canvas.getContext("2d")!;
-    // コンストラクタ時点では this.canvas はダミー要素のため storage だけ更新する
-    MapCreator.updateStorage();
+    this.viewport = viewport;
   }
 
-  /** canvas を差し替える（init 直後に canvasRef をセットするために使用） */
+  public setViewport(viewport: ViewportMetrics) {
+    this.viewport = viewport;
+  }
+
   public setCanvas(canvas: HTMLCanvasElement) {
+    // canvas を差し替える（init 直後に canvasRef をセットするために使用）
     this.canvas = canvas;
     this.ctx = this.canvas.getContext("2d")!;
     this.resize();
   }
 
-  public async newMap(mapraw: MapRaw, canvas: HTMLCanvasElement) {
+  public async newMap(mapraw: MapRaw) {
     // 新しいマップを作成
-    this.canvas = canvas;
-    this.ctx = this.canvas.getContext("2d")!;
     this.resize();
     this.map = await this.loadMap(mapraw);
   }
@@ -54,17 +56,18 @@ export default class MapCreator {
   }
 
   private drawUsers(users: User[], left: number, top: number, getAvatar: (user: User) => HTMLImageElement | undefined) {
+    const outer = this.viewport.outer;
     for (const user of users) {
       const i = user.x - left;
       const j = user.y - top;
-      if (i < 0 || storage.outer <= i) continue;
-      if (j < 0 || storage.outer <= j) continue;
+      if (i < 0 || outer <= i) continue;
+      if (j < 0 || outer <= j) continue;
       this.drawUser(user, i, j, getAvatar(user));
     }
   }
 
   private drawUser(user: User, i: number, j: number, avatar: HTMLImageElement | undefined) {
-    const grid = this.canvas.width / storage.outer;
+    const grid = this.canvas.width / this.viewport.outer;
     if (!avatar) return;
     this.ctx.beginPath();
     this.ctx.arc(i * grid + grid / 2, j * grid + grid / 2, grid / 2, 0, Math.PI * 2, false);
@@ -80,12 +83,13 @@ export default class MapCreator {
 
   private drawTop(left: number, top: number) {
     const imgGrid = this.map.topImage.width / this.map.width;
+    const outer = this.viewport.outer;
     this.ctx.drawImage(
       this.map.topImage,
       imgGrid * left,
       imgGrid * top,
-      imgGrid * storage.outer,
-      imgGrid * storage.outer,
+      imgGrid * outer,
+      imgGrid * outer,
       0,
       0,
       this.canvas.width,
@@ -96,12 +100,13 @@ export default class MapCreator {
 
   private drawBottom(left: number, top: number) {
     const imgGrid = this.map.bottomImage.width / this.map.width;
+    const outer = this.viewport.outer;
     this.ctx.drawImage(
       this.map.bottomImage,
       imgGrid * left,
       imgGrid * top,
-      imgGrid * storage.outer,
-      imgGrid * storage.outer,
+      imgGrid * outer,
+      imgGrid * outer,
       0,
       0,
       this.canvas.width,
@@ -111,7 +116,7 @@ export default class MapCreator {
 
   private drawGrid() {
     this.ctx.strokeStyle = "rgba(200,200,200,0.2)";
-    let grid = this.canvas.width / storage.outer;
+    let grid = this.canvas.width / this.viewport.outer;
     for (let i = 0; i <= this.canvas.height / grid; ++i) {
       this.ctx.beginPath();
       this.ctx.moveTo(0, grid * i);
@@ -128,26 +133,7 @@ export default class MapCreator {
     }
   }
 
-  /** ウィンドウサイズから canvas の一辺サイズを計算し storage を更新して返す */
-  public static updateStorage(): number {
-    const portrait = window.matchMedia("(orientation: portrait)").matches;
-    // Portrait : 外側 p-0(0px)  + canvas 側 p-6(48px)                           =  48px
-    // Landscape: 外側 p-4(32px) + canvas 側 p-6(48px) + VoicePanel w-72(288px) = 368px
-    const maxWidth = portrait ? window.innerWidth - 48 : window.innerWidth - 368;
-    // Portrait : 外側 p-0 + canvas 側 p-6(48px) + ヘッダー(~52px) + VoicePanel(~297px) = 397px
-    // Landscape: 外側 p-4(32px) + canvas 側 p-6(48px) + ヘッダー(~48px)                = 128px
-    const maxHeight = portrait ? window.innerHeight - 397 : window.innerHeight - 128;
-    const size = Math.max(120, Math.min(maxWidth, maxHeight));
-    // Portrait: マス目を1段階大きく（outer を小さく = 1マスあたりのピクセルが大きくなる）
-    storage.outer = portrait
-      ? Math.max(4, Math.min(10, Math.round(size / 48)))
-      : Math.max(8, Math.min(20, Math.round(size / 40)));
-    storage.inner = Math.max(1, Math.floor(storage.outer / 3));
-    return size;
-  }
-
-  public resize() {
-    const size = MapCreator.updateStorage();
+  public resize(size: number = this.viewport.size) {
     if (this.canvas.width !== size) this.canvas.width = size;
     if (this.canvas.height !== size) this.canvas.height = size;
   }

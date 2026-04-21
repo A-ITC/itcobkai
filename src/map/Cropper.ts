@@ -1,5 +1,5 @@
-import { storage } from "../common/Common";
 import { Map } from "../common/Schema";
+import { ViewportMetrics } from "./Viewport";
 
 export interface Crop {
   x: number;
@@ -15,10 +15,17 @@ export default class Cropper {
   private x = 0;
   private y = 0;
   private map: Map;
+  private viewport: ViewportMetrics;
 
-  constructor(map: Map, x: number, y: number) {
+  constructor(map: Map, x: number, y: number, viewport: ViewportMetrics) {
     this.map = map;
+    this.viewport = viewport;
     this.jump(x, y);
+  }
+
+  public setViewport(viewport: ViewportMetrics) {
+    this.viewport = viewport;
+    this.updateRect();
   }
 
   public canMove(dx: number, dy: number): boolean {
@@ -38,7 +45,7 @@ export default class Cropper {
   }
 
   public jump(x: number, y: number) {
-    const range = Math.ceil(storage.outer / 2);
+    const range = Math.ceil(this.viewport.outer / 2);
     this.x = x;
     this.y = y;
     this.top = this.y - range;
@@ -47,14 +54,16 @@ export default class Cropper {
   }
 
   private updateRect() {
-    if (this.x - this.left >= storage.outer - storage.inner) this.left += 1;
-    else if (this.x - this.left < storage.inner) this.left -= 1;
-    if (this.y - this.top >= storage.outer - storage.inner) this.top += 1;
-    else if (this.y - this.top < storage.inner) this.top -= 1;
+    const outer = this.viewport.outer;
+    const inner = this.viewport.inner;
+    if (this.x - this.left >= outer - inner) this.left += 1;
+    else if (this.x - this.left < inner) this.left -= 1;
+    if (this.y - this.top >= outer - inner) this.top += 1;
+    else if (this.y - this.top < inner) this.top -= 1;
     if (this.left < 0) this.left = 0;
-    else if (this.left >= this.map.width - storage.outer) this.left = this.map.width - storage.outer;
+    else if (this.left >= this.map.width - outer) this.left = this.map.width - outer;
     if (this.top < 0) this.top = 0;
-    else if (this.top >= this.map.height - storage.outer) this.top = this.map.height - storage.outer;
+    else if (this.top >= this.map.height - outer) this.top = this.map.height - outer;
   }
 
   public get(): Crop {

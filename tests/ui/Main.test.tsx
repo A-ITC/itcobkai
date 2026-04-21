@@ -4,7 +4,16 @@ import userEvent from "@testing-library/user-event";
 import Main from "../../src/pages/Main";
 import { User } from "../../src/common/Schema";
 
-const { mockRequest, mockManager, mockManagerConstructor, mockMatchMedia } = vi.hoisted(() => {
+const {
+  mockRequest,
+  mockManager,
+  mockManagerConstructor,
+  mockMatchMedia,
+  mockViewportMetrics,
+  mockViewportStart,
+  mockViewportDispose,
+  mockViewportServiceConstructor
+} = vi.hoisted(() => {
   const mockManager = {
     init: vi.fn(),
     start: vi.fn().mockResolvedValue(undefined),
@@ -26,18 +35,33 @@ const { mockRequest, mockManager, mockManagerConstructor, mockMatchMedia } = vi.
     addEventListener: vi.fn(),
     removeEventListener: vi.fn()
   }));
-  return { mockRequest, mockManager, mockManagerConstructor, mockMatchMedia };
+  const mockViewportMetrics = { size: 320, outer: 8, inner: 2 };
+  const mockViewportStart = vi.fn();
+  const mockViewportDispose = vi.fn();
+  const mockViewportServiceConstructor = vi.fn(function MockViewportService(
+    onChange: (metrics: typeof mockViewportMetrics) => void
+  ) {
+    this.start = mockViewportStart.mockImplementation(() => onChange(mockViewportMetrics));
+    this.dispose = mockViewportDispose;
+  });
+  return {
+    mockRequest,
+    mockManager,
+    mockManagerConstructor,
+    mockMatchMedia,
+    mockViewportMetrics,
+    mockViewportStart,
+    mockViewportDispose,
+    mockViewportServiceConstructor
+  };
 });
 
 vi.mock("../../src/main/Manager", () => ({
   default: mockManagerConstructor
 }));
 
-vi.mock("../../src/common/Common", () => ({
-  default: mockRequest,
-  storage: { outer: 13, inner: 2 },
-  beep: vi.fn(),
-  ticker: { move: vi.fn() }
+vi.mock("../../src/common/Request", () => ({
+  default: mockRequest
 }));
 
 vi.mock("../../src/common/ImageLoader", () => ({
@@ -47,16 +71,16 @@ vi.mock("../../src/common/ImageLoader", () => ({
   })
 }));
 
-vi.mock("../../src/map/MapCreator", () => ({
-  default: {
-    updateStorage: vi.fn(() => 320)
-  }
+vi.mock("../../src/map/Viewport", () => ({
+  ViewportService: mockViewportServiceConstructor
 }));
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  mockViewportStart.mockReset();
+  mockViewportDispose.mockReset();
   mockManager.onUpdate = undefined;
   mockManager.onUpdateMap = undefined;
   mockManager.onDisconnect = undefined;
@@ -90,6 +114,7 @@ describe("Main", () => {
     expect(screen.queryByText("退席")).not.toBeInTheDocument();
     expect(screen.queryByText("消音")).not.toBeInTheDocument();
     expect(mockManagerConstructor).toHaveBeenCalledTimes(1);
+    expect(mockManager.onResize).toHaveBeenCalledWith(mockViewportMetrics);
   });
 
   it("接続済み状態では退席と消音を表示する", async () => {

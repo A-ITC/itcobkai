@@ -4,11 +4,11 @@ import HostMessageDispatcher from "./HostMessageDispatcher";
 import { browserNotifications } from "../common/Toast";
 import RtcSession from "./RtcSession";
 import UserStore from "./UserStore";
-import request from "../common/Common";
+import { ViewportMetrics } from "../map/Viewport";
 
 // Mainの肥大化を防ぐため処理部分を全てこちらに分離
 export default class Manager {
-  private mc = new Controller();
+  private ctl = new Controller();
   private rtc = new RtcSession();
   private userStore = new UserStore();
   private dispatcher: HostMessageDispatcher;
@@ -22,21 +22,20 @@ export default class Manager {
       this.onUpdate(users);
     });
     this.dispatcher = new HostMessageDispatcher({
-      controller: this.mc,
+      controller: this.ctl,
       userStore: this.userStore,
       notifications: browserNotifications,
-      fetchUser: h => this.fetchUser(h),
       getPlayerId: () => this.playerId,
       onUpdateMap: area => this.onUpdateMap(area)
     });
   }
 
   public moveBy(dx: number, dy: number) {
-    this.mc.moveBy(dx, dy);
+    this.ctl.moveBy(dx, dy);
   }
 
-  public onResize() {
-    this.mc.onResize();
+  public onResize(viewport: ViewportMetrics) {
+    this.ctl.onResize(viewport);
   }
 
   public init(playerId: string) {
@@ -46,7 +45,7 @@ export default class Manager {
   public async start(canvas: HTMLCanvasElement, audio: HTMLAudioElement, lkToken: string) {
     // Controller と dataFrom を先に初期化する。rtc.init() 内の room.connect() が解決した
     // 直後にサーバーから INIT が届くことがあり、dataFrom が未設定だと握りつぶされるため。
-    this.mc.init(canvas, (data: GuestMessage) => {
+    this.ctl.init(canvas, (data: GuestMessage) => {
       this.send(data);
     });
     this.rtc.onHostMessage = async (data: HostMessage) => {
@@ -67,18 +66,8 @@ export default class Manager {
     this.rtc.send(data);
   }
 
-  private async fetchUser(h: string): Promise<User | undefined> {
-    try {
-      const user = await request("GET", `/users/${h}`);
-      return user ?? undefined;
-    } catch (e) {
-      console.error(`Failed to fetch user ${h}:`, e);
-      return undefined;
-    }
-  }
-
   public async end() {
-    this.mc.destroy();
+    this.ctl.destroy();
     await this.rtc.disconnect();
   }
 
@@ -89,6 +78,6 @@ export default class Manager {
     }
     void this.rtc.setMuted(mute);
     this.send({ command: GuestCommand.MUTE, mute });
-    this.mc.refresh();
+    this.ctl.refresh();
   }
 }

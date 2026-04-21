@@ -1,6 +1,6 @@
 import { createSignal, onMount, For } from "solid-js";
 import { User } from "../common/Schema";
-import request from "../common/Common";
+import request from "../common/Request";
 
 type Group = "dtm" | "cg" | "prog" | "mv" | "3dcg";
 

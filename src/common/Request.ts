@@ -1,23 +1,5 @@
 export const URI_PREFIX = import.meta.env.PROD ? "dist" : "dev";
 
-interface Storage {
-  outer: number;
-  inner: number;
-}
-
-const defaultStorage: Storage = {
-  outer: 15,
-  inner: 5
-};
-
-export const storage = new Proxy(JSON.parse(localStorage.getItem("storage") ?? JSON.stringify(defaultStorage)), {
-  set: (obj: { [x: string]: any }, prop: string, value: any) => {
-    obj[prop] = value;
-    localStorage.setItem("storage", JSON.stringify(obj));
-    return true;
-  }
-}) as Storage;
-
 type Method = "POST" | "PUT" | "GET" | "DELETE";
 
 const token = { iat: 0, exp: 0, token: "" };

@@ -1,4 +1,5 @@
 import { HostCommand, HostMessage, MapRaw, User } from "../common/Schema";
+import request from "../common/Request";
 import UserStore from "./UserStore";
 import { NotificationPort } from "../common/Toast";
 
@@ -12,7 +13,6 @@ type DispatcherDependencies = {
   controller: ControllerPort;
   userStore: UserStore;
   notifications: NotificationPort;
-  fetchUser: (h: string) => Promise<User | undefined>;
   getPlayerId: () => string;
   onUpdateMap: (area: boolean[][]) => void;
 };
@@ -25,7 +25,6 @@ export default class HostMessageDispatcher {
   private controller: ControllerPort;
   private userStore: UserStore;
   private notifications: NotificationPort;
-  private fetchUser: (h: string) => Promise<User | undefined>;
   private getPlayerId: () => string;
   private onUpdateMap: (area: boolean[][]) => void;
 
@@ -33,7 +32,6 @@ export default class HostMessageDispatcher {
     this.controller = deps.controller;
     this.userStore = deps.userStore;
     this.notifications = deps.notifications;
-    this.fetchUser = deps.fetchUser;
     this.getPlayerId = deps.getPlayerId;
     this.onUpdateMap = deps.onUpdateMap;
   }
@@ -103,5 +101,15 @@ export default class HostMessageDispatcher {
 
   private syncUsers(includePlayerId: boolean = false): void {
     this.controller.setUsers(this.userStore.snapshot(), includePlayerId ? this.getPlayerId() : undefined);
+  }
+
+  private async fetchUser(h: string): Promise<User | undefined> {
+    try {
+      const user = await request("GET", `/users/${h}`);
+      return user ?? undefined;
+    } catch (e) {
+      console.error(`Failed to fetch user ${h}:`, e);
+      return undefined;
+    }
   }
 }
