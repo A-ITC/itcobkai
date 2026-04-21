@@ -3,6 +3,7 @@ import { loadImage } from "../common/ImageLoader";
 import RenderQueue from "./RenderQueue";
 import MapCreator from "./MapCreator";
 import Cropper from "./Cropper";
+import TouchMoveController from "./TouchMoveController";
 import { DEFAULT_VIEWPORT_METRICS, ViewportMetrics } from "./Viewport";
 
 export default class Controller {
@@ -19,18 +20,46 @@ export default class Controller {
   private users: { [key: string]: User } = {};
   private player: User | undefined;
   private moveTickerId: number | undefined;
+  private readonly onPointerDown = (event: PointerEvent) => {
+    if (!this.isTouchPointer(event.pointerType)) return;
+    const point = this.toCanvasPoint(this.canvas, event);
+    if (!this.touchMoveController.start(event.pointerId, point)) return;
+    event.preventDefault();
+    this.canvas.setPointerCapture?.(event.pointerId);
+  };
+  private readonly onPointerMove = (event: PointerEvent) => {
+    if (!this.isTouchPointer(event.pointerType)) return;
+    const point = this.toCanvasPoint(this.canvas, event);
+    if (!this.touchMoveController.update(event.pointerId, point)) return;
+    event.preventDefault();
+  };
+  private readonly onPointerUp = (event: PointerEvent) => {
+    this.finishPointer(event);
+  };
+  private readonly onPointerCancel = (event: PointerEvent) => {
+    this.finishPointer(event);
+  };
+  private touchMoveController = new TouchMoveController(
+    (dx: number, dy: number) => this.moveBy(dx, dy),
+    () => void this.refresh(),
+    100,
+    18,
+    this.viewport.size / this.viewport.outer
+  );
 
   public onResize(viewport: ViewportMetrics = this.viewport) {
     this.viewport = viewport;
     this.mc.setViewport(viewport);
     this.mc.resize(viewport.size);
     this.cropper.setViewport(viewport);
+    this.touchMoveController.setTileSize(this.getTileSize(viewport));
     this.refresh();
   }
 
   public init(canvas: HTMLCanvasElement, message: (data: any) => void) {
     // 初期化処理
     this.message = message;
+    this.detachPointerListeners();
     this.canvas = canvas;
     this.mc = new MapCreator(this.viewport);
     this.avatars = {};
@@ -39,6 +68,8 @@ export default class Controller {
     this.mc.setCanvas(canvas);
     this.cropper = new Cropper(this.mc.map, 0, 0, this.viewport);
     this.renderQueue = new RenderQueue(async () => this.renderFrame());
+    this.touchMoveController.setTileSize(this.getTileSize());
+    this.attachPointerListeners();
     if (this.moveTickerId !== undefined) {
       window.clearInterval(this.moveTickerId);
     }
@@ -96,6 +127,8 @@ export default class Controller {
   }
 
   public destroy() {
+    this.detachPointerListeners();
+    this.touchMoveController.destroy();
     if (this.moveTickerId !== undefined) {
       window.clearInterval(this.moveTickerId);
       this.moveTickerId = undefined;
@@ -108,6 +141,10 @@ export default class Controller {
     if (this.player) allUsers.push(this.player);
     await Promise.all(allUsers.map(user => this.ensureAvatarLoaded(user)));
     this.mc.draw(allUsers, left, top, user => this.avatars[user.h]);
+    const ctx = this.canvas.getContext("2d");
+    if (ctx) {
+      this.touchMoveController.draw(ctx);
+    }
   }
 
   private ensureAvatarLoaded(user: User): Promise<HTMLImageElement> {
@@ -132,5 +169,42 @@ export default class Controller {
 
     this.pendingAvatarLoads.set(loadKey, load);
     return load;
+  }
+
+  private finishPointer(event: PointerEvent) {
+    const handled = this.touchMoveController.end(event.pointerId);
+    if (!handled) return;
+    event.preventDefault();
+    this.canvas.releasePointerCapture?.(event.pointerId);
+  }
+
+  private isTouchPointer(pointerType: string) {
+    return pointerType === "touch" || pointerType === "pen";
+  }
+
+  private toCanvasPoint(canvas: HTMLCanvasElement, event: PointerEvent) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  }
+
+  private attachPointerListeners() {
+    this.canvas.addEventListener("pointerdown", this.onPointerDown);
+    this.canvas.addEventListener("pointermove", this.onPointerMove);
+    this.canvas.addEventListener("pointerup", this.onPointerUp);
+    this.canvas.addEventListener("pointercancel", this.onPointerCancel);
+  }
+
+  private detachPointerListeners() {
+    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
+    this.canvas.removeEventListener("pointermove", this.onPointerMove);
+    this.canvas.removeEventListener("pointerup", this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
+  }
+
+  private getTileSize(viewport: ViewportMetrics = this.viewport) {
+    return viewport.size / viewport.outer;
   }
 }

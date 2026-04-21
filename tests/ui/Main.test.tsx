@@ -39,6 +39,7 @@ const {
   const mockViewportStart = vi.fn();
   const mockViewportDispose = vi.fn();
   const mockViewportServiceConstructor = vi.fn(function MockViewportService(
+    this: { start: () => void; dispose: typeof mockViewportDispose },
     onChange: (metrics: typeof mockViewportMetrics) => void
   ) {
     this.start = mockViewportStart.mockImplementation(() => onChange(mockViewportMetrics));
