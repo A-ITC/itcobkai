@@ -1,3 +1,4 @@
+from asyncio import gather
 from logging import getLogger
 from pydantic import BaseModel
 from ..rtc.rtc import lkapi, init_room
@@ -57,10 +58,18 @@ async def master_request(post: MasterRequest):
         await send_message_all(NewmapCommand(map=position_store.get_map_meta()))
         if moves:
             # 自分自身の座標は送信しない（クライアント側の座標を優先）
-            for recipient_h in list(active_sessions.keys()):
-                others = [mv for mv in moves if mv.h != recipient_h]
-                if others:
-                    await send_message(recipient_h, MovedCommand(moves=others))
+            # 受信者ごとに除外対象が変わるので send_message_others() は使えない
+            recipient_moves = [
+                (recipient_h, [mv for mv in moves if mv.h != recipient_h])
+                for recipient_h in list(active_sessions.keys())
+            ]
+            await gather(
+                *[
+                    send_message(recipient_h, MovedCommand(moves=others))
+                    for recipient_h, others in recipient_moves
+                    if others
+                ]
+            )
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:

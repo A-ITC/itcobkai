@@ -56,9 +56,12 @@ async def _handle_update(
     logger.info(f"UPDATE - {us.get_name(h)}")
     current_user = us.get(h)
     current_position = position_store.get_position(h)
-    x, y = current_position if current_position else (0, 0)
-    if current_position is None and current_user is not None:
+    if current_position is not None:
+        x, y = current_position
+    elif current_user is not None:
         x, y = current_user.x, current_user.y
+    else:
+        x, y = 0, 0
 
     user = User(
         h=h,

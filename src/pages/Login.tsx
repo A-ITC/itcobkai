@@ -47,7 +47,6 @@ function PleaseWait(props: PleaseWaitProps) {
     } else {
       window.alert("認証中に予期せぬエラーが発生しました。");
     }
-    console.log(props.code);
     window.history.replaceState({}, "", location.pathname);
   }
 

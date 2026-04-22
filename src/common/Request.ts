@@ -5,7 +5,7 @@ type Method = "POST" | "PUT" | "GET" | "DELETE";
 const token = { iat: 0, exp: 0, token: "" };
 
 export default async function request(method: Method, path: string, post: any = {}): Promise<any> {
-  if (token.iat + token.exp < Date.now() / 1000 - 10) {
+  if (token.iat + token.exp - 10 < Date.now() / 1000) {
     const res = await fetch(`/api/token`, {
       method: "GET",
       credentials: "include"

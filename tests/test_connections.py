@@ -7,7 +7,6 @@ calculate_connections() / connections_to_islands() のユニットテスト（Li
   3. 片方が島の中、片方が島の外 → 隣接していても接続しない
 """
 
-import pytest
 from api.master.connections import calculate_connections, connections_to_islands
 from api.master.grid import label_islands
 
@@ -41,7 +40,8 @@ class TestRule1SameIsland:
         # A=(0,0), B=(2,2) — 遠く離れているが同じ島
         positions = {"A": (0, 0), "B": (2, 2)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") in result
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B"}
 
     def test_users_in_different_islands_are_not_connected(self):
         """異なる島にいる 2 ユーザーは接続されない（隣接しているが別島）"""
@@ -51,7 +51,7 @@ class TestRule1SameIsland:
         # A=(0,0) 左島, B=(4,0) 右島
         positions = {"A": (0, 0), "B": (4, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") not in result
+        assert result == []
 
     def test_three_users_all_in_same_island(self):
         """3 ユーザーが同じ島にいれば全ペアが接続される"""
@@ -59,9 +59,8 @@ class TestRule1SameIsland:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (1, 0), "C": (2, 1)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") in result
-        assert ("A", "C") in result
-        assert ("B", "C") in result
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B", "C"}
 
 
 # ---------------------------------------------------------------------------
@@ -76,7 +75,8 @@ class TestRule2BothOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (1, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") in result
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B"}
 
     def test_diagonal_adjacent_outside_users_are_connected(self):
         """対角（チェビシェフ距離 1）も接続"""
@@ -84,7 +84,8 @@ class TestRule2BothOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (1, 1)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") in result
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B"}
 
     def test_non_adjacent_outside_users_are_not_connected(self):
         """両方が島の外だが距離 2 以上 → 接続されない"""
@@ -92,7 +93,7 @@ class TestRule2BothOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (2, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") not in result
+        assert result == []
 
     def test_transitive_chain_outside_abc(self):
         """A-B, B-C が接続（島外チェーン）→ A-C も推移的に接続"""
@@ -101,9 +102,8 @@ class TestRule2BothOutside:
         # A=(0,0), B=(1,0), C=(2,0) — それぞれ隣接
         positions = {"A": (0, 0), "B": (1, 0), "C": (2, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") in result
-        assert ("B", "C") in result
-        assert ("A", "C") in result  # 推移的閉包
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B", "C"}
 
     def test_transitive_chain_abc_not_connected_to_isolated_d(self):
         """A-B-C チェーンが接続されても、離れた D とは接続されない"""
@@ -111,9 +111,8 @@ class TestRule2BothOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (1, 0), "C": (2, 0), "D": (5, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "D") not in result
-        assert ("B", "D") not in result
-        assert ("C", "D") not in result
+        assert len(result) == 1
+        assert set(result[0]) == {"A", "B", "C"}
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +129,7 @@ class TestRule3MixedIslandAndOutside:
         # A=(1,0) 島内, B=(2,0) 島外 — チェビシェフ距離 1
         positions = {"A": (1, 0), "B": (2, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") not in result
+        assert result == []
 
     def test_island_user_and_far_outside_user_not_connected(self):
         """島内ユーザーと遠い島外ユーザーも当然接続されない"""
@@ -138,7 +137,7 @@ class TestRule3MixedIslandAndOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (4, 0)}
         result = calculate_connections(positions, ids, area)
-        assert ("A", "B") not in result
+        assert result == []
 
     def test_outside_user_cannot_bridge_two_islands_via_outside(self):
         """島外ユーザーが 2 つの島の間に立っても島同士は繋がらない
@@ -152,12 +151,7 @@ class TestRule3MixedIslandAndOutside:
         # island_A_user=(0,0) 島内, C=(1,0) 島外, island_B_user=(4,0) 島内
         positions = {"island_A_user": (0, 0), "C": (1, 0), "island_B_user": (4, 0)}
         result = calculate_connections(positions, ids, area)
-        # C は島外だが island_A_user は島内 → 接続不可
-        assert tuple(sorted(["C", "island_A_user"])) not in result
-        # C と island_B_user も同様
-        assert tuple(sorted(["C", "island_B_user"])) not in result
-        # 結果として island_A_user と island_B_user も非接続
-        assert tuple(sorted(["island_A_user", "island_B_user"])) not in result
+        assert result == []
 
     def test_three_users_island_outside_outside_chain(self):
         """島内 A、島外 B（A に隣接）、島外 C（B に隣接）のとき B-C のみ接続"""
@@ -165,12 +159,8 @@ class TestRule3MixedIslandAndOutside:
         ids = _island_ids(area)
         positions = {"A": (0, 0), "B": (1, 0), "C": (2, 0)}
         result = calculate_connections(positions, ids, area)
-        # A は島内、B は島外 → 接続不可
-        assert ("A", "B") not in result
-        # B と C は両方島外かつ隣接 → 接続
-        assert ("B", "C") in result
-        # A と C は接続経路なし
-        assert ("A", "C") not in result
+        assert len(result) == 1
+        assert set(result[0]) == {"B", "C"}
 
 
 # ---------------------------------------------------------------------------

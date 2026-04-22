@@ -10,5 +10,5 @@ def id62(num: int) -> str:
     return uid
 
 
-def id7(num: int) -> str:
-    return id62(int(blake2b(str(num).encode(), digest_size=5).hexdigest(), 16))
+def id7(value: int | str) -> str:
+    return id62(int(blake2b(str(value).encode(), digest_size=5).hexdigest(), 16))

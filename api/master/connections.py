@@ -13,16 +13,15 @@ class LastUpdated:
     disconnects: list[Connection]
 
 
-def calculate_connections(
+def _build_adjacency(
     user_positions: dict[str, Position],
     island_ids: list[list[int]],
     area: list[list[bool]],
-) -> "set[Connection]":
-    """ユーザー位置・島ID・エリアグリッドから現在の接続ペア集合を計算する"""
+) -> dict[str, list[str]]:
+    """ユーザー位置・島ID・エリアグリッドから隣接リストを構築する"""
     user_list = list(user_positions.items())
     adj: dict[str, list[str]] = {u_id: [] for u_id, _ in user_list}
 
-    # 1. 直接的な接続の抽出
     for i in range(len(user_list)):
         for j in range(i + 1, len(user_list)):
             u1, p1 = user_list[i]
@@ -45,9 +44,20 @@ def calculate_connections(
                 adj[u1].append(u2)
                 adj[u2].append(u1)
 
-    # 2. 連結成分の抽出
-    connections: set[Connection] = set()
+    return adj
+
+
+def calculate_connections(
+    user_positions: dict[str, Position],
+    island_ids: list[list[int]],
+    area: list[list[bool]],
+) -> list[list[str]]:
+    """ユーザー位置・島ID・エリアグリッドから現在の接続グループを計算する"""
+    user_list = list(user_positions.items())
+    adj = _build_adjacency(user_positions, island_ids, area)
+
     visited: set[str] = set()
+    islands: list[list[str]] = []
 
     for start_id, _ in user_list:
         if start_id in visited:
@@ -65,14 +75,10 @@ def calculate_connections(
                     visited.add(neighbor)
                     stack.append(neighbor)
 
-        # ペア生成
-        for i in range(len(component)):
-            for j in range(i + 1, len(component)):
-                u_a, u_b = component[i], component[j]
-                pair = (u_a, u_b) if u_a < u_b else (u_b, u_a)
-                connections.add(pair)
+        if len(component) > 1:
+            islands.append(component)
 
-    return connections
+    return islands
 
 
 def connections_to_islands(connections: "set[Connection]") -> list[list[str]]:

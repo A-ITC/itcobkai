@@ -64,7 +64,7 @@ export class RTCClient {
 
   private beep() {
     // 動作確認用の音を鳴らす
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     gain.gain.value = 0.1;
