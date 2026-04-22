@@ -99,7 +99,14 @@ export function VoicePanel(props: VoicePanelProps) {
             接続中
           </div>
           <div class="space-y-1 mb-3">
-            <For each={sections().connected}>{user => <UserItem user={user} />}</For>
+            <For each={sections().connected}>
+              {user => (
+                <UserItem
+                  user={user}
+                  showGreeting
+                />
+              )}
+            </For>
           </div>
         </Show>
         <Show when={sections().online.length > 0}>
@@ -116,7 +123,7 @@ export function VoicePanel(props: VoicePanelProps) {
 }
 
 // UserItem: ユーザーリストの各行
-function UserItem(props: { user: User }) {
+function UserItem(props: { user: User; showGreeting?: boolean }) {
   let imageRef: HTMLImageElement | undefined;
 
   createEffect(() => {
@@ -126,7 +133,11 @@ function UserItem(props: { user: User }) {
   });
 
   return (
-    <div class="flex items-center gap-3 py-3 portrait:py-4 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors">
+    <div
+      class={`flex gap-3 py-3 portrait:py-4 border-b border-gray-700/50 last:border-0 hover:bg-gray-700/30 px-2 transition-colors ${
+        props.showGreeting ? "items-start" : "items-center"
+      }`}
+    >
       <div class="relative shrink-0">
         <img
           ref={imageRef}
@@ -144,6 +155,11 @@ function UserItem(props: { user: User }) {
         <div class="text-[10px] portrait:text-xs text-gray-500 truncate">
           {props.user.groups?.join(", ") || "No Group"}
         </div>
+        <Show when={props.showGreeting && props.user.greeting?.trim()}>
+          <p class="mt-1 text-xs portrait:text-sm leading-relaxed text-gray-300 whitespace-pre-wrap break-words">
+            {props.user.greeting}
+          </p>
+        </Show>
       </div>
     </div>
   );

@@ -257,4 +257,23 @@ describe("Main", () => {
     expect(screen.getByText("オンライン")).toBeInTheDocument();
     expect(screen.getByText("Far User")).toBeInTheDocument();
   });
+
+  it("接続中ユーザだけ greeting を各行の下に表示する", async () => {
+    render(() => <Main />);
+
+    const user = userEvent.setup();
+    await user.click(screen.getByText("接続"));
+    await screen.findByText("退席");
+
+    mockManager.onUpdateMap?.([[false, false, false, false, false, false]]);
+    mockManager.onUpdate?.({
+      "player-hash": makeUser({ h: "player-hash", name: "Player" }),
+      near: makeUser({ h: "near", name: "Near User", groups: ["prog"], x: 1, greeting: "近くのユーザの挨拶" }),
+      far: makeUser({ h: "far", name: "Far User", groups: ["cg"], x: 5, greeting: "遠くのユーザの挨拶" })
+    });
+
+    await screen.findByText("Near User");
+    expect(screen.getByText("近くのユーザの挨拶")).toBeInTheDocument();
+    expect(screen.queryByText("遠くのユーザの挨拶")).not.toBeInTheDocument();
+  });
 });
