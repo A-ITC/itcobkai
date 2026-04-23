@@ -31,6 +31,22 @@ class DiscordUserInfo:
     avatar: str | None
 
 
+def _parse_allowed_server_ids() -> set[str]:
+    if not DISCORD_ALLOWED_SERVERS:
+        return set()
+    server_ids: set[str] = set()
+    for item in DISCORD_ALLOWED_SERVERS.split(","):
+        value = item.strip()
+        if not value:
+            continue
+        if ":" in value:
+            _, value = value.rsplit(":", 1)
+            value = value.strip()
+        if value:
+            server_ids.add(value)
+    return server_ids
+
+
 def _build_redirect_uri() -> str:
     """DEV_PORTが実際にLISTEN状態にあるかを確認して開発環境(/dev)か本番環境(/dist)のリダイレクトURIを生成する。"""
     if DEV_PORT:
@@ -116,24 +132,16 @@ async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:
     response = await client.get(url, headers=headers)
     body = response.json()
 
-    allowed_servers: dict[str, str] = {}
-    if DISCORD_ALLOWED_SERVERS:
-        allowed_servers = {
-            s_id: label
-            for item in DISCORD_ALLOWED_SERVERS.split(",")
-            if ":" in item
-            for label, s_id in [item.split(":", 1)]
-        }
-
-    server_names: list[str] = []
+    allowed_server_ids = _parse_allowed_server_ids()
+    matched_server_ids: list[str] = []
     if isinstance(body, list):
         for guild in body:
             g_id = str(guild.get("id"))
-            if g_id in allowed_servers:
-                server_names.append(allowed_servers[g_id])
+            if g_id in allowed_server_ids:
+                matched_server_ids.append(g_id)
 
-    if server_names:
-        return server_names
+    if matched_server_ids:
+        return matched_server_ids
 
     raise HTTPException(401, "server not allowed")
 

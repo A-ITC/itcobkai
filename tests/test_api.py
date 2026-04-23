@@ -4,8 +4,10 @@ import pytest
 from time import time
 from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient, ASGITransport
+from fastapi import HTTPException
 
 from api.api.auth import encode
+from api.api.discord import _check_joined
 from api.master.user import us
 from tests.conftest import make_test_user
 
@@ -115,6 +117,37 @@ class TestApiSession:
         assert "session" in resp.cookies
 
 
+class TestDiscordAllowedServers:
+    async def test_check_joined_accepts_numeric_server_id_list(self):
+        """許可サーバ設定はサーバIDのカンマ区切りで判定する"""
+        client = AsyncMock()
+        response = MagicMock()
+        response.json.return_value = [
+            {"id": "111111111111111111"},
+            {"id": "222222222222222222"},
+        ]
+        client.get.return_value = response
+
+        with patch(
+            "api.api.discord.DISCORD_ALLOWED_SERVERS",
+            "999999999999999999, 222222222222222222",
+        ):
+            joined = await _check_joined(client, "access-token")
+
+        assert joined == ["222222222222222222"]
+
+    async def test_check_joined_rejects_when_no_allowed_server_matches(self):
+        """所属サーバーに許可IDがなければ 401"""
+        client = AsyncMock()
+        response = MagicMock()
+        response.json.return_value = [{"id": "111111111111111111"}]
+        client.get.return_value = response
+
+        with patch("api.api.discord.DISCORD_ALLOWED_SERVERS", "222222222222222222"):
+            with pytest.raises(HTTPException, match="server not allowed"):
+                await _check_joined(client, "access-token")
+
+
 # ---------------------------------------------------------------------------
 # /api/master
 # ---------------------------------------------------------------------------
@@ -169,6 +202,7 @@ class TestApiMaster:
         dummy.username = "user_abc"
         room_context.active_sessions["user_abc"] = dummy
         us._users["user_abc"] = make_test_user("user_abc", "Alice")
+        room_context.volumes["user_abc"] = 1.25
 
         resp = await local_client.post("/api/master", json={"command": "USERS"})
 
@@ -178,6 +212,62 @@ class TestApiMaster:
         user_entry = next((u for u in body["users"] if u["h"] == "user_abc"), None)
         assert user_entry is not None
         assert user_entry["name"] == "Alice"
+        assert user_entry["volume"] == pytest.approx(1.25)
+
+    async def test_users_returns_default_volume_when_unset(
+        self, local_client, room_context
+    ):
+        """USERS コマンドは未設定ユーザーに既定音量 1.0 を返す"""
+        room_context.active_sessions["user_xyz"] = MagicMock()
+        us._users["user_xyz"] = make_test_user("user_xyz", "Bob")
+
+        resp = await local_client.post("/api/master", json={"command": "USERS"})
+
+        assert resp.status_code == 200
+        body = resp.json()
+        user_entry = next((u for u in body["users"] if u["h"] == "user_xyz"), None)
+        assert user_entry is not None
+        assert user_entry["volume"] == pytest.approx(1.0)
+
+    async def test_volume_updates_runtime_state(self, local_client, room_context):
+        """VOLUME コマンドは接続中ユーザーの音量をランタイム状態へ反映する"""
+        room_context.active_sessions["user_abc"] = MagicMock()
+
+        resp = await local_client.post(
+            "/api/master",
+            json={"command": "VOLUME", "h": "user_abc", "volume": 1.5},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True}
+        assert room_context.volumes["user_abc"] == pytest.approx(1.5)
+
+    @pytest.mark.parametrize("volume", [-0.1, 2.1])
+    async def test_volume_rejects_out_of_range(
+        self, local_client, room_context, volume
+    ):
+        """VOLUME コマンドは 0-2 の範囲外を拒否する"""
+        room_context.active_sessions["user_abc"] = MagicMock()
+
+        resp = await local_client.post(
+            "/api/master",
+            json={"command": "VOLUME", "h": "user_abc", "volume": volume},
+        )
+
+        assert resp.status_code == 400
+        assert resp.json()["error"] == "Volume must be between 0 and 2"
+        assert "user_abc" not in room_context.volumes
+
+    async def test_volume_rejects_user_not_connected(self, local_client, room_context):
+        """VOLUME コマンドは未接続ユーザーを拒否する"""
+        resp = await local_client.post(
+            "/api/master",
+            json={"command": "VOLUME", "h": "missing_user", "volume": 1.0},
+        )
+
+        assert resp.status_code == 404
+        assert resp.json()["error"] == "User not connected"
+        assert "missing_user" not in room_context.volumes
 
     async def test_unknown_command_returns_400(self, local_client):
         """未知のコマンドは 400 を返す"""

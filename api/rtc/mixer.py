@@ -11,6 +11,7 @@ from .state import (
     audio_tasks,
     current_islands,
     muted_users,
+    volumes,
 )
 from asyncio import CancelledError, current_task, get_event_loop, sleep
 from livekit.rtc import AudioFrame, AudioStream, Track
@@ -23,13 +24,25 @@ _MAX_QUEUE_SIZE = 10
 # ミキシングループ用事前確保バッファ
 # asyncio は単一スレッドで動作するため、ループ内で順番に使用する限り安全に再利用できる
 _island_sum = np.empty(
-    FRAME_SAMPLES, dtype=np.int32
+    FRAME_SAMPLES, dtype=np.float32
 )  # 島ごとの合計音声（read-only for per-user loop）
-_user_mix = np.empty(FRAME_SAMPLES, dtype=np.int32)  # ユーザーごとの差分計算バッファ
+_scaled_sender = np.empty(
+    FRAME_SAMPLES, dtype=np.float32
+)  # 送信者ごとの音量適用バッファ
+_user_mix = np.empty(FRAME_SAMPLES, dtype=np.float32)  # ユーザーごとの差分計算バッファ
 _user_mix16 = np.empty(FRAME_SAMPLES, dtype=np.int16)  # int16 変換用出力バッファ
 _silence_bytes = np.zeros(
     FRAME_SAMPLES, dtype=np.int16
 ).tobytes()  # 無音フレーム（定数）
+
+
+def _write_scaled_frame(user: str, frame: np.ndarray, out: np.ndarray) -> None:
+    gain = volumes.get(user, 1.0)
+    effective_gain = gain * gain
+    if effective_gain == 1.0:
+        np.copyto(out, frame, casting="unsafe")
+        return
+    np.multiply(frame, effective_gain, out=out, casting="unsafe")
 
 
 async def process_user_audio(session: UserSession, track: Track):
@@ -139,9 +152,12 @@ async def mixing_loop():
 
             # 全員の音声合計を事前確保バッファに in-place で計算（中間配列の生成を回避）
             if frames:
-                _island_sum[:] = 0
-                for f in frames.values():
-                    np.add(_island_sum, f, out=_island_sum, casting="unsafe")
+                _island_sum[:] = 0.0
+                for user, frame in frames.items():
+                    _write_scaled_frame(user, frame, _scaled_sender)
+                    np.add(
+                        _island_sum, _scaled_sender, out=_island_sum, casting="unsafe"
+                    )
 
             for target_user in island:
                 session = active_sessions.get(target_user)
@@ -155,9 +171,12 @@ async def mixing_loop():
                     )
                 elif target_user in frames:
                     # Total Sum から自分の音声を引く（O(1)）、事前確保バッファを再利用
+                    _write_scaled_frame(
+                        target_user, frames[target_user], _scaled_sender
+                    )
                     np.subtract(
                         _island_sum,
-                        frames[target_user],
+                        _scaled_sender,
                         out=_user_mix,
                         casting="unsafe",
                     )

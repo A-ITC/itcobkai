@@ -2,7 +2,7 @@ from asyncio import gather
 from logging import getLogger
 from pydantic import BaseModel
 from ..rtc.rtc import lkapi, init_room
-from ..rtc.state import active_sessions, connects
+from ..rtc.state import active_sessions, connects, volumes
 from livekit.api import RoomParticipantIdentity
 from ..master.user import us
 from ..rtc.adapter import (
@@ -28,15 +28,18 @@ class MasterRequest(BaseModel):
     text: str | None = None
     reload: bool = False
     h: str | None = None
+    volume: float | None = None
 
 
 async def master_request(post: MasterRequest):
     if post.command == "ALERT":
         text = post.text or ""
+        logger.info(f"ALERT - text={text}, reload={post.reload}")
         await send_message_all(AlertCommand(text=text, reload=post.reload))
         return {"ok": True}
 
     if post.command == "NEWMAP" and post.map:
+        logger.info(f"NEWMAP - map={post.map}")
         try:
             meta = map_repository.load_map(post.map)
         except KeyError:
@@ -73,6 +76,7 @@ async def master_request(post: MasterRequest):
         return {"ok": True}
 
     if post.command == "LEAVE" and post.h:
+        logger.info(f"LEAVE - h={post.h}")
         try:
             await lkapi.room.remove_participant(
                 RoomParticipantIdentity(room=post.h, identity=post.h)
@@ -82,13 +86,38 @@ async def master_request(post: MasterRequest):
         return {"ok": True}
 
     if post.command == "USERS":
+        logger.info("USERS")
         users = []
         for session_h in list(active_sessions.keys()):
             user = us.get(session_h)
-            users.append({"h": session_h, "name": user.name if user else ""})
+            users.append(
+                {
+                    "h": session_h,
+                    "name": user.name if user else "",
+                    "volume": volumes.get(session_h, 1.0),
+                }
+            )
         return {"users": users}
 
+    if post.command == "VOLUME":
+        logger.info(f"VOLUME - h={post.h}, volume={post.volume}")
+        if not post.h or post.volume is None:
+            return JSONResponse(
+                content={"error": "Missing user hash or volume"}, status_code=400
+            )
+        if not 0.0 <= post.volume <= 2.0:
+            return JSONResponse(
+                content={"error": "Volume must be between 0 and 2"}, status_code=400
+            )
+        if post.h not in active_sessions:
+            return JSONResponse(
+                content={"error": "User not connected"}, status_code=404
+            )
+        volumes[post.h] = post.volume
+        return {"ok": True}
+
     if post.command == "BOTINIT" and post.h:
+        logger.info(f"BOTINIT - h={post.h}")
         if post.h in active_sessions:
             return JSONResponse(
                 content={"error": "User already active"}, status_code=409
@@ -96,4 +125,5 @@ async def master_request(post: MasterRequest):
         await init_room(post.h)
         return {"ok": True}
 
+    logger.info(f"UNKNOWN - command={post.command}")
     return JSONResponse(content={"error": "Unknown command"}, status_code=400)

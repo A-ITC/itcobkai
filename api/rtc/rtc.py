@@ -6,6 +6,7 @@ from .state import (
     active_sessions,
     audio_tasks,
     handler,
+    volumes,
 )
 from .mixer import process_user_audio
 from typing import cast
@@ -157,6 +158,7 @@ async def _setup_bot_in_room(room_name: str, username: str):
         logger.info(f"LEAVE - {us.get_name(participant.identity)}")
         if s := active_sessions.pop(participant.identity, None):
             create_task(s.room.disconnect())
+        volumes.pop(participant.identity, None)
         create_task(handler.on_leave(participant.identity))
 
     bot_token = create_token("python-bot", room_name)

@@ -48,6 +48,7 @@ class Handler:
 active_sessions: dict[str, UserSession] = {}
 current_islands: list[list[str]] = []
 muted_users: set[str] = set()
+volumes: dict[str, float] = {}
 audio_tasks: set[Task[None]] = set()
 handler = Handler()
 
@@ -68,6 +69,7 @@ def reset_runtime_state() -> None:
     active_sessions.clear()
     current_islands.clear()
     muted_users.clear()
+    volumes.clear()
     audio_tasks.clear()
 
 

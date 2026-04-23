@@ -35,6 +35,7 @@ from api.rtc.state import (
     muted_users,
     reset_runtime_state,
     set_mute,
+    volumes,
 )
 from api.master.connection_service import connection_service
 from api.master.grid import prepare_map
@@ -104,6 +105,7 @@ def room_context():
         audio_tasks=audio_tasks,
         current_islands=current_islands,
         muted_users=muted_users,
+        volumes=volumes,
         handlers=handler,
         connects=connects,
         set_mute=set_mute,
