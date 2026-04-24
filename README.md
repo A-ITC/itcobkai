@@ -8,6 +8,7 @@
 - Developer Portal で新規アプリケーションを作成し、OAuth2 の Client ID と Client Secret を取得しておくこと
 - WebRTCは TLS 化が必須のため独自ドメインを用意しておくこと
 - nginx等でリバースプロキシの設定を済ませておくこと(後述)
+
 ```
 // nginxの設定例
 server {
@@ -79,7 +80,6 @@ UDP_PORT=3478
 ### デプロイ
 
 ```sh
-# LiveKit サーバーを起動
 docker compose up -d
 ```
 

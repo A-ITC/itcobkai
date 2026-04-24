@@ -23,18 +23,18 @@ services:
           udp_port: ${UDP_PORT}
     command: --dev
 
-  # app:
-  #   build:
-  #     context: .
-  #     args:
-  #       DOMAIN: ${DOMAIN}
-  #   container_name: app
-  #   restart: unless-stopped
-  #   env_file:
-  #     - .env
-  #   ports:
-  #     - "${API_PORT:-41022}:${API_PORT:-41022}"
-  #   volumes:
-  #     - ./data:/app/data
-  #   depends_on:
-  #     - livekit
+  app:
+    build:
+      context: .
+      args:
+        DOMAIN: ${DOMAIN}
+    container_name: app
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${API_PORT:-41022}:${API_PORT:-41022}"
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - livekit
