@@ -436,7 +436,7 @@ async def test_lk_update_preserves_position_from_server(two_participants):
 async def test_lk_newmap_broadcasts_new_map_and_other_user_positions(
     two_participants, local_client
 ):
-    """NEWMAP 実行時に全参加者が NEWMAP を受け取り、続けて他ユーザーの
+    """NEWMAP 実行時に全参加者が NEWMAP を受け取り、続けて全参加者分の
     再配置座標を MOVED で受け取る。
     """
     pa, pb = two_participants
@@ -456,10 +456,8 @@ async def test_lk_newmap_broadcasts_new_map_and_other_user_positions(
     assert msg_a_map["map"]["name"] == "map2"
     assert msg_b_map["map"]["name"] == "map2"
 
-    assert len(msg_a_move["moves"]) == 1
-    assert len(msg_b_move["moves"]) == 1
-    assert msg_a_move["moves"][0]["h"] == HB
-    assert msg_b_move["moves"][0]["h"] == HA
+    assert {move["h"] for move in msg_a_move["moves"]} == {HA, HB}
+    assert {move["h"] for move in msg_b_move["moves"]} == {HA, HB}
 
 
 # ---------------------------------------------------------------------------

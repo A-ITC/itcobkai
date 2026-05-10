@@ -137,11 +137,13 @@ async def _check_joined(client: AsyncClient, access_token: str) -> list[str]:
     if isinstance(body, list):
         for guild in body:
             g_id = str(guild.get("id"))
+            print(guild)
             if g_id in allowed_server_ids:
                 matched_server_ids.append(g_id)
 
     if matched_server_ids:
         return matched_server_ids
+    return matched_server_ids
 
     raise HTTPException(401, "server not allowed")
 

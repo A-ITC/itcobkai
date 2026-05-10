@@ -335,7 +335,7 @@ if __name__ == "__main__":
     load_dotenv()
     data_json = "maps.json"
 
-    makedirs("data/map", exist_ok=True)
+    makedirs("data/maps", exist_ok=True)
     json_path = Path(f"data/{data_json}")
     if json_path.exists():
         with json_path.open("r", encoding="utf-8") as f:
@@ -365,7 +365,7 @@ if __name__ == "__main__":
         img = Renderer.render(tmx, target_layers)
         h = sha256(img).hexdigest()
         result[key] = h
-        if not (png := Path(f"data/map/{h}.png")).exists():
+        if not (png := Path(f"data/maps/{h}.png")).exists():
             _, buf = cv2.imencode(".png", img)
             with png.open("wb") as f:
                 f.write(buf.tobytes())

@@ -38,7 +38,7 @@ async def _handle_move(h: str, x: Coordinate, y: Coordinate) -> None:
         connects(
             connection_service.get_current_islands(position_store.get_all_positions())
         )
-        await send_message_all(MovedCommand(moves=[Move(h=h, x=x, y=y)]))
+        await send_message_others(h, MovedCommand(moves=[Move(h=h, x=x, y=y)]))
 
 
 @validate_call

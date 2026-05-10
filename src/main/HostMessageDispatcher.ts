@@ -47,6 +47,7 @@ export default class HostMessageDispatcher {
         this.notifications.joined(data.user.name);
         break;
       case HostCommand.MOVED:
+        let movedPlayer = false;
         await this.userStore.batch(async () => {
           for (const move of data.moves) {
             if (!this.userStore.has(move.h)) {
@@ -56,12 +57,13 @@ export default class HostMessageDispatcher {
               }
             }
             if (move.h === this.getPlayerId()) {
+              movedPlayer = true;
               this.controller.jumpTo(move.x, move.y);
             }
           }
           this.userStore.applyMoves(data.moves);
         });
-        this.syncUsers();
+        this.syncUsers(movedPlayer);
         break;
       case HostCommand.UPDATED:
         this.userStore.upsert(data.user);

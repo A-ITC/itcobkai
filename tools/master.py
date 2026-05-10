@@ -71,11 +71,15 @@ def print_table(table: list[list[str]], headers: list[str]) -> str:
         if num:
             digits = max([-1] + [_dp(value) for value in col])
             col = [value + " " * (digits - _dp(value)) for value in col]
-            width = max([_text_width(header) + 2] + [_text_width(value) for value in col])
+            width = max(
+                [_text_width(header) + 2] + [_text_width(value) for value in col]
+            )
             col = [_rjust_width(value, width) for value in col]
         else:
             col = [value.strip() for value in col]
-            width = max([_text_width(header) + 2] + [_text_width(value) for value in col])
+            width = max(
+                [_text_width(header) + 2] + [_text_width(value) for value in col]
+            )
             col = [_ljust_width(value, width) for value in col]
 
         widths.append(width)
@@ -233,10 +237,10 @@ def main():
 
     # volume
     p_volume = sub.add_parser(
-        "volume", help="指定したユーザーの音量を 0%-200% の範囲で設定する"
+        "volume", help="指定したユーザーの音量を 0%%-200%% の範囲で設定する"
     )
     p_volume.add_argument("hash", help="ユーザーハッシュ (users コマンドで確認可)")
-    p_volume.add_argument("volume", type=_parse_volume, help="音量 (0-2, 0%-200%)")
+    p_volume.add_argument("volume", type=_parse_volume, help="音量 (0-2, 0%%-200%%)")
     p_volume.set_defaults(func=cmd_volume)
 
     args = parser.parse_args()
