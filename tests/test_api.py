@@ -386,6 +386,34 @@ class TestApiUsersMe:
         assert body["greeting"] == "こんにちは"
         assert body["h"] == "testhash123"
 
+    async def test_post_me_broadcasts_updated_to_self_too(
+        self, client, valid_auth_header
+    ):
+        """プロフィール更新は送信者本人を含めて UPDATED を配信する"""
+        us._users["testhash123"] = make_test_user("testhash123", "Old Name")
+
+        with patch("api.api.router.send_message_all", new=AsyncMock()) as send_all:
+            resp = await client.post(
+                "/api/users/@me",
+                headers=valid_auth_header,
+                json={
+                    "name": "New Name",
+                    "year": 5,
+                    "groups": ["cg", "prog"],
+                    "greeting": "こんにちは",
+                },
+            )
+
+        assert resp.status_code == 200
+        send_all.assert_awaited_once()
+        payload = send_all.await_args.args[0]
+        assert payload.command == "UPDATED"
+        assert payload.user.h == "testhash123"
+        assert payload.user.name == "New Name"
+        assert payload.user.year == 5
+        assert payload.user.groups == ["cg", "prog"]
+        assert payload.user.greeting == "こんにちは"
+
     async def test_post_me_user_not_found_returns_404(self, client, valid_auth_header):
         """UserStore に存在しないユーザーは 404"""
         resp = await client.post(

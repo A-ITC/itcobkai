@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from .discord import discord, build_authorize_url
 from pydantic import BaseModel, Field
 from ..rtc.rtc import create_token, init_room
-from ..rtc.adapter import UpdatedCommand, send_message_others
+from ..rtc.adapter import UpdatedCommand, send_message_all
 from ..master.user import us, User
 from api.api.admin import MasterRequest, master_request
 from ..utils.config import AVATAR_DIR, MAP_DIR, TTL, SECRET_KEY
@@ -72,7 +72,7 @@ async def update_me(body: UserUpdateRequest, h: str = Depends(auth)):
         y=current.y,
     )
     us.upsert(updated)
-    await send_message_others(h, UpdatedCommand(user=updated))
+    await send_message_all(UpdatedCommand(user=updated))
     return updated.model_dump()
 
 
